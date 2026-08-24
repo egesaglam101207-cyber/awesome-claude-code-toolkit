@@ -19,6 +19,17 @@
   <section class="panel controls" aria-label="Kontroller">
 
     <div class="card">
+      <div class="card-head">
+        <h2>✨ AI ile Otomatik Doldur</h2>
+        <button class="btn-ghost small" id="brandSettingsBtn" type="button">⚙ Marka Kuralları</button>
+      </div>
+      <p class="hint">İstediğin videoyu bir cümleyle anlat, Claude marka kurallarına bağlı kalarak başlık/alt yazı/şablon önerisini doldursun.</p>
+      <textarea id="aiPrompt" class="ai-prompt" rows="3" placeholder="Örn: Yaz indirimi için enerjik, kırmızı vurgulu kısa bir reels"></textarea>
+      <button class="btn-primary" id="aiGenerateBtn" type="button">Claude ile Doldur</button>
+      <p class="status" id="aiStatus"></p>
+    </div>
+
+    <div class="card">
       <h2>1. Fotoğraf / Klip Ekle</h2>
       <label class="dropzone" id="dropzone" for="fileInput">
         <span class="dropzone-icon">＋</span>
@@ -96,6 +107,61 @@
     </div>
   </section>
 </main>
+
+<dialog id="brandDialog" class="brand-dialog">
+  <form method="dialog" class="brand-form" id="brandForm">
+    <h2>Marka Kuralları</h2>
+    <p class="hint">Bu kurallar tarayıcında saklanır ve her AI önerisinde otomatik olarak uygulanır.</p>
+
+    <label class="brand-field">
+      <span>Anthropic API Anahtarı</span>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
+      <small class="warn">⚠️ Bu anahtar sadece bu tarayıcıda (localStorage) saklanır ve isteği doğrudan Claude API'ye gönderir. Herkesle paylaşılan bir cihazda kullanmayın; tarayıcı geliştirici araçlarından görülebilir.</small>
+    </label>
+
+    <label class="brand-field">
+      <span>Marka adı</span>
+      <input type="text" id="brandNameInput" placeholder="Örn: Atölye Nova">
+    </label>
+
+    <label class="brand-field">
+      <span>Ton / üslup</span>
+      <input type="text" id="brandToneInput" placeholder="Örn: enerjik ve samimi">
+    </label>
+
+    <label class="brand-field">
+      <span>Dil</span>
+      <select id="brandLanguageInput">
+        <option value="Türkçe" selected>Türkçe</option>
+        <option value="English">English</option>
+      </select>
+    </label>
+
+    <label class="brand-field">
+      <span>Varsayılan şablon</span>
+      <select id="brandTemplateInput">
+        <option value="kenburns" selected>Ken Burns</option>
+        <option value="slide">Kaydırma</option>
+        <option value="snap">Kesme</option>
+      </select>
+    </label>
+
+    <label class="brand-field">
+      <span>Vurgu rengi</span>
+      <input type="color" id="brandAccentInput" value="#fd1d1d">
+    </label>
+
+    <label class="brand-field">
+      <span>Yasaklı kelimeler (virgülle ayır)</span>
+      <input type="text" id="brandBannedInput" placeholder="Örn: ücretsiz, garanti">
+    </label>
+
+    <div class="brand-actions">
+      <button type="button" class="btn-ghost" id="brandCancelBtn">Vazgeç</button>
+      <button type="submit" class="btn-primary" id="brandSaveBtn">Kaydet</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="app.js"></script>
 </body>

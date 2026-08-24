@@ -33,6 +33,21 @@
   const phoneEmpty = document.getElementById('phoneEmpty');
   const fpsSelect = document.getElementById('fpsSelect');
 
+  const aiPrompt = document.getElementById('aiPrompt');
+  const aiGenerateBtn = document.getElementById('aiGenerateBtn');
+  const aiStatus = document.getElementById('aiStatus');
+  const brandSettingsBtn = document.getElementById('brandSettingsBtn');
+  const brandDialog = document.getElementById('brandDialog');
+  const brandForm = document.getElementById('brandForm');
+  const brandCancelBtn = document.getElementById('brandCancelBtn');
+  const apiKeyInput = document.getElementById('apiKeyInput');
+  const brandNameInput = document.getElementById('brandNameInput');
+  const brandToneInput = document.getElementById('brandToneInput');
+  const brandLanguageInput = document.getElementById('brandLanguageInput');
+  const brandTemplateInput = document.getElementById('brandTemplateInput');
+  const brandAccentInput = document.getElementById('brandAccentInput');
+  const brandBannedInput = document.getElementById('brandBannedInput');
+
   /** @type {{id:number,type:'image'|'video',url:string,el:HTMLImageElement|HTMLVideoElement,duration:number,title:string,subtitle:string}[]} */
   let slides = [];
   let nextId = 1;
@@ -43,6 +58,37 @@
   let previewRAF = null;
   let previewStart = 0;
   let isExporting = false;
+  let pendingSuggestion = null;
+
+  const BRAND_STORAGE_KEY = 'reelsBrandRules';
+  const defaultBrandRules = {
+    apiKey: '',
+    brandName: '',
+    tone: '',
+    language: 'Türkçe',
+    defaultTemplate: 'kenburns',
+    accentColor: '#fd1d1d',
+    bannedWords: '',
+  };
+  let brandRules = loadBrandRules();
+
+  function loadBrandRules() {
+    try {
+      const raw = localStorage.getItem(BRAND_STORAGE_KEY);
+      if (!raw) return { ...defaultBrandRules };
+      return { ...defaultBrandRules, ...JSON.parse(raw) };
+    } catch {
+      return { ...defaultBrandRules };
+    }
+  }
+
+  function saveBrandRules() {
+    try {
+      localStorage.setItem(BRAND_STORAGE_KEY, JSON.stringify(brandRules));
+    } catch {
+      // localStorage unavailable (private mode, quota) — brand rules just won't persist
+    }
+  }
 
   // ---------- Slide management ----------
 
@@ -62,6 +108,12 @@
         title: '',
         subtitle: '',
       };
+
+      if (slides.length === 0 && pendingSuggestion) {
+        slide.title = pendingSuggestion.title;
+        slide.subtitle = pendingSuggestion.subtitle;
+        pendingSuggestion = null;
+      }
 
       if (isImage) {
         const img = new Image();
@@ -242,9 +294,13 @@
   templateGrid.addEventListener('click', (e) => {
     const btn = e.target.closest('.template-option');
     if (!btn) return;
-    template = btn.dataset.template;
-    [...templateGrid.children].forEach((c) => c.classList.toggle('active', c === btn));
+    setActiveTemplate(btn.dataset.template);
   });
+
+  function setActiveTemplate(name) {
+    template = name;
+    [...templateGrid.children].forEach((c) => c.classList.toggle('active', c.dataset.template === name));
+  }
 
   // ---------- Drawing ----------
 
@@ -307,6 +363,12 @@
     gradient.addColorStop(1, 'rgba(0,0,0,0.55)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, boxTop, CANVAS_W, boxHeight + 100);
+
+    if (lines.length) {
+      ctx.fillStyle = brandRules.accentColor || '#fd1d1d';
+      const tagWidth = 64;
+      ctx.fillRect(CANVAS_W / 2 - tagWidth / 2, boxTop + 6, tagWidth, 6);
+    }
 
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ffffff';
@@ -556,6 +618,145 @@
   }
 
   exportBtn.addEventListener('click', startExport);
+
+  // ---------- Brand rules ----------
+
+  function fillBrandForm() {
+    apiKeyInput.value = brandRules.apiKey;
+    brandNameInput.value = brandRules.brandName;
+    brandToneInput.value = brandRules.tone;
+    brandLanguageInput.value = brandRules.language;
+    brandTemplateInput.value = brandRules.defaultTemplate;
+    brandAccentInput.value = brandRules.accentColor;
+    brandBannedInput.value = brandRules.bannedWords;
+  }
+
+  brandSettingsBtn.addEventListener('click', () => {
+    fillBrandForm();
+    brandDialog.showModal();
+  });
+
+  brandCancelBtn.addEventListener('click', () => brandDialog.close());
+
+  brandForm.addEventListener('submit', () => {
+    brandRules = {
+      apiKey: apiKeyInput.value.trim(),
+      brandName: brandNameInput.value.trim(),
+      tone: brandToneInput.value.trim(),
+      language: brandLanguageInput.value,
+      defaultTemplate: brandTemplateInput.value,
+      accentColor: brandAccentInput.value,
+      bannedWords: brandBannedInput.value.trim(),
+    };
+    saveBrandRules();
+    drawAtTime(0);
+  });
+
+  // ---------- AI-assisted fill (Claude) ----------
+
+  function buildBrandSystemPrompt(rules) {
+    const lines = [
+      'Sen bir Instagram Reels video oluşturucu uygulaması için içerik asistanısın.',
+      'Kullanıcının kısa isteğinden bir reels başlığı, kısa bir alt yazı ve en uygun geçiş şablonunu seç.',
+      'Kurallar:',
+      '- title: en fazla 8 kelime, dikkat çekici, ünlem/emoji kullanma.',
+      '- subtitle: en fazla 12 kelime, tamamlayıcı bilgi; gerekmiyorsa boş bırakabilirsin.',
+      '- template: sadece "kenburns" (yavaş yakınlaşma), "slide" (yandan kayma) veya "snap" (net kesmeler) değerlerinden biri olmalı.',
+    ];
+    if (rules.brandName) lines.push(`- Marka adı: ${rules.brandName}. Metinlerde doğal şekilde geçebilir ama zorunlu değil.`);
+    if (rules.tone) lines.push(`- Ton: ${rules.tone} olmalı.`);
+    lines.push(`- Dil: ${rules.language || 'Türkçe'} kullan.`);
+    if (rules.defaultTemplate) lines.push(`- Kullanıcının isteği aksini belirtmedikçe varsayılan şablon olarak "${rules.defaultTemplate}" tercih et.`);
+    if (rules.bannedWords) lines.push(`- Şu kelimeleri kesinlikle kullanma: ${rules.bannedWords}.`);
+    return lines.join('\n');
+  }
+
+  function applySuggestion(suggestion) {
+    setActiveTemplate(suggestion.template);
+    if (slides.length > 0) {
+      slides[0].title = suggestion.title;
+      slides[0].subtitle = suggestion.subtitle;
+      renderSlideList();
+      drawAtTime(0);
+    } else {
+      pendingSuggestion = suggestion;
+    }
+  }
+
+  function setAiStatus(message, kind) {
+    aiStatus.textContent = message;
+    aiStatus.className = `status${kind ? ` ${kind}` : ''}`;
+  }
+
+  aiGenerateBtn.addEventListener('click', async () => {
+    const promptText = aiPrompt.value.trim();
+    if (!promptText) {
+      setAiStatus('Önce ne tür bir video istediğini yaz.', 'error');
+      return;
+    }
+    if (!brandRules.apiKey) {
+      setAiStatus('Önce Marka Kuralları içinden bir Anthropic API anahtarı gir.', 'error');
+      fillBrandForm();
+      brandDialog.showModal();
+      return;
+    }
+
+    aiGenerateBtn.disabled = true;
+    setAiStatus('Claude\'a soruluyor…');
+
+    try {
+      const [{ default: Anthropic }, { z }, { zodOutputFormat }] = await Promise.all([
+        import('https://esm.sh/@anthropic-ai/sdk'),
+        import('https://esm.sh/zod'),
+        import('https://esm.sh/@anthropic-ai/sdk/helpers/zod'),
+      ]);
+
+      const client = new Anthropic({ apiKey: brandRules.apiKey, dangerouslyAllowBrowser: true });
+
+      const ReelSuggestionSchema = z.object({
+        title: z.string(),
+        subtitle: z.string(),
+        template: z.enum(['kenburns', 'slide', 'snap']),
+      });
+
+      const response = await client.messages.parse({
+        model: 'claude-opus-5',
+        max_tokens: 4096,
+        system: buildBrandSystemPrompt(brandRules),
+        output_config: {
+          format: zodOutputFormat(ReelSuggestionSchema),
+          effort: 'low',
+        },
+        messages: [{ role: 'user', content: promptText }],
+      });
+
+      if (!response.parsed_output) {
+        throw new Error('Claude yanıtı beklenen formatta ayrıştırılamadı.');
+      }
+
+      applySuggestion(response.parsed_output);
+      setAiStatus('Öneri uygulandı — dilersen düzenleyip videoyu oluşturabilirsin.', 'success');
+    } catch (err) {
+      console.error(err);
+      let message = 'Bilinmeyen bir hata oluştu.';
+      if (/dynamically imported module|Failed to fetch/i.test(err?.message || '')) {
+        message = 'Claude SDK yüklenemedi — internet bağlantını veya CDN erişimini kontrol et.';
+      } else if (err?.name === 'AuthenticationError' || err?.status === 401) {
+        message = 'API anahtarı geçersiz görünüyor. Marka Kuralları\'ndan kontrol et.';
+      } else if (err?.name === 'RateLimitError' || err?.status === 429) {
+        message = 'İstek sınırına takıldı, biraz sonra tekrar dene.';
+      } else if (err?.name === 'BadRequestError' || err?.status === 400) {
+        message = `İstek reddedildi: ${err.message || ''}`;
+      } else if (err?.status) {
+        message = `Claude API hatası (${err.status}): ${err.message || ''}`;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      setAiStatus(message, 'error');
+    } finally {
+      aiGenerateBtn.disabled = false;
+    }
+  });
 
   // ---------- Initial paint ----------
   drawAtTime(0);
