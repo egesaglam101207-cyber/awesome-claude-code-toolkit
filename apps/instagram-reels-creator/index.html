@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reels Video Oluşturucu</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <h1>Reels Video Oluşturucu</h1>
+  </div>
+  <p class="brand-sub">Tamamen tarayıcında çalışır &mdash; dosyaların hiçbir sunucuya gönderilmez.</p>
+</header>
+
+<main class="layout">
+  <section class="panel controls" aria-label="Kontroller">
+
+    <div class="card">
+      <h2>1. Fotoğraf / Klip Ekle</h2>
+      <label class="dropzone" id="dropzone" for="fileInput">
+        <span class="dropzone-icon">＋</span>
+        <span>Görsel veya kısa video sürükle, ya da tıkla</span>
+        <input type="file" id="fileInput" accept="image/*,video/*" multiple hidden>
+      </label>
+      <ul class="slide-list" id="slideList"></ul>
+    </div>
+
+    <div class="card">
+      <h2>2. Şablon</h2>
+      <div class="template-grid" id="templateGrid">
+        <button class="template-option active" data-template="kenburns">
+          <span class="tpl-preview tpl-kenburns"></span>
+          Ken Burns
+          <small>Yavaş yakınlaşma + geçiş</small>
+        </button>
+        <button class="template-option" data-template="slide">
+          <span class="tpl-preview tpl-slide"></span>
+          Kaydırma
+          <small>Yandan kayarak geçiş</small>
+        </button>
+        <button class="template-option" data-template="snap">
+          <span class="tpl-preview tpl-snap"></span>
+          Kesme
+          <small>Net, hızlı kesmeler</small>
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3. Arka Plan Müziği</h2>
+      <label class="dropzone small" id="musicDropzone" for="musicInput">
+        <span class="dropzone-icon">♪</span>
+        <span id="musicLabel">Ses dosyası seç (opsiyonel)</span>
+        <input type="file" id="musicInput" accept="audio/*" hidden>
+      </label>
+      <div class="field-row" id="musicVolumeRow" hidden>
+        <label for="musicVolume">Müzik seviyesi</label>
+        <input type="range" id="musicVolume" min="0" max="1" step="0.05" value="0.8">
+        <button class="btn-ghost small" id="removeMusic" type="button">Kaldır</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>4. Dışa Aktar</h2>
+      <div class="field-row">
+        <label for="fpsSelect">Kare hızı</label>
+        <select id="fpsSelect">
+          <option value="24">24 fps</option>
+          <option value="30" selected>30 fps</option>
+        </select>
+      </div>
+      <p class="hint" id="durationHint">Toplam süre: 0 sn</p>
+      <button class="btn-primary" id="exportBtn" type="button" disabled>Reels Videosunu Oluştur</button>
+      <div class="progress" id="progressWrap" hidden>
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <p class="status" id="statusText"></p>
+      <a class="btn-primary btn-download" id="downloadLink" hidden download>Videoyu İndir</a>
+    </div>
+  </section>
+
+  <section class="panel preview-panel" aria-label="Önizleme">
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <canvas id="previewCanvas" width="1080" height="1920"></canvas>
+      <div class="phone-empty" id="phoneEmpty">
+        <p>Önizlemeyi görmek için soldan bir fotoğraf veya video ekle</p>
+      </div>
+    </div>
+    <div class="preview-controls">
+      <button class="btn-ghost" id="playBtn" type="button" disabled>▶ Önizlemeyi Oynat</button>
+      <button class="btn-ghost" id="stopBtn" type="button" disabled>■ Durdur</button>
+    </div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
