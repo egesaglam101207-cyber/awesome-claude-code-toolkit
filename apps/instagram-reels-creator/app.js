@@ -1600,17 +1600,25 @@
       '',
       'Görsel stil (kod tarafında sabit, senin ayarlaman gerekmiyor): flat vector, kalın siyah kontur, teal ve turuncu düz renkler, gölgesiz, sade arka plan.',
       '',
+      'İstek bir yedek parça satıcısı / otomotiv işletmesi reklamıysa, kullanıcı ayrıca marka kuralı vermese bile (rules boş olsa bile) aşağıdaki kanıtlanmış kısa video reklam yapısını KENDİLİĞİNDEN uygula — bunlar senin varsayılan uzmanlığın, kullanıcının onları yazması gerekmez:',
+      '  1. Kanca (1. sahne): ilk 3 saniyede izleyicinin sesini kapalı izlese bile anlayacağı somut bir problem veya değeri göster (ör. arıza lambası yanıyor, ses geliyor, parça bulunamıyor). engine-warning/dashboard-light/hand-sensor bunun için iyi seçimlerdir.',
+      '  2. Teşhis/gerginlik (varsa 2. sahne): sorunu netleştir, neden önemli olduğunu hissettir (güvenlik, ek arıza riski, zaman kaybı).',
+      '  3. Çözüm (varsa 3. sahne): doğru/orijinal parça veya doğru işlemle sorunun nasıl çözüldüğünü göster (wrench-tool, hand-sensor, car-driver). Mümkünse güven sinyali kur: orijinal/OEM parça, garanti, doğru uyumluluk (fitment), hızlı kargo/kurulum gibi ifadeler — ama abartılı/kanıtlanamaz iddialar (ör. "%100 garanti", "asla bozulmaz") kullanma.',
+      '  4. Sonuç + net CTA (son sahne): checkmark-fixed veya growth-chart ile sonucu (güvenli sürüş, verimlilik, sorunsuz yol) göster ve subtitle alanına tek, açık bir eylem çağrısı yaz (ör. "Hemen DM\'den sor", "Bugün sipariş ver, yarın elinde", "Stokta — şimdi yaz"). Bir videoda birden fazla farklı CTA verme, tek bir net sonraki adım olsun.',
+      'Bu otomotiv reklam yapısı zorunlu bir şablon değil, bir varsayılan strateji — istek otomotiv dışıysa veya kullanıcı açıkça farklı bir yapı istiyorsa buna bağlı kalma.',
+      '',
       'Kullanıcının isteğinden 1 ile 4 arası sahneden oluşan bir video planı oluştur:',
       '- Her sahne "composition" alanında "split" (iki çizim yan yana) veya "full" (tek çizim ortada) olmalı.',
       '- "split" seçersen sceneLeft ve sceneRight FARKLI iki sahne kimliği olmalı.',
       '- "full" seçersen sceneLeft kullanılacak sahnedir; sceneRight yine geçerli bir kimlik olmalı ama görselde kullanılmaz (sceneLeft ile aynısını yazabilirsin).',
       '- "checkmark-fixed" genelde son sahne olarak iyi çalışır (çözüm/tamamlanma hissi verir).',
       '- title: en fazla 7 kelime, dikkat çekici, ünlem/emoji kullanma.',
-      '- subtitle: en fazla 12 kelime, tamamlayıcı bilgi; gerekmiyorsa boş bırakabilirsin.',
+      '- subtitle: en fazla 12 kelime; tamamlayıcı bilgi, güven sinyali veya (son sahnede) CTA taşır — sesi kapalı izleyen biri sadece ekran metniyle mesajı anlayabilmeli, gerekmiyorsa boş bırakabilirsin.',
       '- duration: 2 ile 8 saniye arası (saniye, sayı).',
     ];
     if (rules.brandName) lines.push(`- Marka adı: ${rules.brandName}. Metinlerde doğal şekilde geçebilir ama zorunlu değil.`);
     if (rules.tone) lines.push(`- Ton: ${rules.tone} olmalı.`);
+    else lines.push('- Ton: içten ve güven veren; abartılı satış dili veya kanıtlanamaz iddialar kullanma.');
     lines.push(`- Dil: ${rules.language || 'Türkçe'} kullan.`);
     if (rules.bannedWords) lines.push(`- Şu kelimeleri kesinlikle kullanma: ${rules.bannedWords}.`);
     return lines.join('\n');
@@ -1652,10 +1660,10 @@
 
   const DEMO_PLAN = {
     scenes: [
-      { title: 'Yolculuğa hazır', subtitle: 'Doğru parçayla güvenli sürüş', duration: 3, composition: 'split', sceneLeft: 'car-driver', sceneRight: 'hand-sensor' },
-      { title: 'Teşhis kondu', subtitle: 'Gösterge paneli uyardı', duration: 2.5, composition: 'split', sceneLeft: 'dashboard-light', sceneRight: 'engine-warning' },
-      { title: 'Sonuç: %30 daha verimli', subtitle: 'Doğru parçayla', duration: 3, composition: 'full', sceneLeft: 'growth-chart', sceneRight: 'growth-chart' },
-      { title: 'Tamamlandı', subtitle: 'Sorunsuz yol', duration: 2, composition: 'full', sceneLeft: 'checkmark-fixed', sceneRight: 'checkmark-fixed' },
+      { title: 'Gösterge paneli uyardı', subtitle: 'Bu ışığı görmezden gelme', duration: 2.5, composition: 'split', sceneLeft: 'dashboard-light', sceneRight: 'engine-warning' },
+      { title: 'Doğru parça, doğru elde', subtitle: 'Orijinal parça, tam uyumlu', duration: 3, composition: 'split', sceneLeft: 'hand-sensor', sceneRight: 'wrench-tool' },
+      { title: 'Sonuç: %30 daha verimli', subtitle: 'Güvenli ve sorunsuz yolculuk', duration: 3, composition: 'full', sceneLeft: 'growth-chart', sceneRight: 'growth-chart' },
+      { title: 'Stokta, kargoya hazır', subtitle: 'Hemen DM\'den yaz', duration: 2, composition: 'full', sceneLeft: 'checkmark-fixed', sceneRight: 'checkmark-fixed' },
     ],
   };
 
