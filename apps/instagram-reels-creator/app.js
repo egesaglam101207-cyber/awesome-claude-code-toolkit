@@ -1,21 +1,32 @@
 /*
- * Instagram Reels Video Creator — fully client-side.
- * No uploads leave the browser: files are read as object URLs and
- * composited onto a <canvas>, then captured with MediaRecorder.
+ * Instagram Reels Video Creator — fully client-side, no uploads.
+ * Every frame is procedurally drawn on a <canvas> (flat vector illustration
+ * style, bold black outlines) from a fixed scene library. Claude plans which
+ * scenes to use from a free-text prompt; MediaRecorder captures the result.
  */
 (() => {
   const CANVAS_W = 1080;
   const CANVAS_H = 1920;
-  const TRANSITION_MS = 500;
-  const DEFAULT_IMAGE_DURATION = 3;
-  const MAX_CLIP_DURATION = 12;
+  const TRANSITION_MS = 600;
+  const DEFAULT_SCENE_DURATION = 4;
+  const MIN_SCENE_DURATION = 2;
+  const MAX_SCENE_DURATION = 10;
+
+  const SCENE_LABELS = {
+    'car-driver': { emoji: '🚗', label: 'Araba + Sürücü' },
+    'hand-sensor': { emoji: '🖐️', label: 'El + Parça' },
+    'engine-warning': { emoji: '⚠️', label: 'Motor Uyarısı' },
+    'wrench-tool': { emoji: '🔧', label: 'Anahtar/Tamir' },
+    'dashboard-light': { emoji: '📟', label: 'Gösterge Paneli' },
+    'checkmark-fixed': { emoji: '✅', label: 'Onay/Tamamlandı' },
+    'abstract-shapes': { emoji: '✨', label: 'Soyut Şekiller' },
+  };
+  const SCENE_IDS = Object.keys(SCENE_LABELS);
 
   const canvas = document.getElementById('previewCanvas');
   const ctx = canvas.getContext('2d');
-  const fileInput = document.getElementById('fileInput');
-  const dropzone = document.getElementById('dropzone');
-  const slideListEl = document.getElementById('slideList');
-  const templateGrid = document.getElementById('templateGrid');
+  const sceneListEl = document.getElementById('sceneList');
+  const scenesEmptyHint = document.getElementById('scenesEmptyHint');
   const musicInput = document.getElementById('musicInput');
   const musicDropzone = document.getElementById('musicDropzone');
   const musicLabel = document.getElementById('musicLabel');
@@ -32,6 +43,7 @@
   const durationHint = document.getElementById('durationHint');
   const phoneEmpty = document.getElementById('phoneEmpty');
   const fpsSelect = document.getElementById('fpsSelect');
+  const qualitySelect = document.getElementById('qualitySelect');
 
   const aiPrompt = document.getElementById('aiPrompt');
   const aiGenerateBtn = document.getElementById('aiGenerateBtn');
@@ -44,21 +56,21 @@
   const brandNameInput = document.getElementById('brandNameInput');
   const brandToneInput = document.getElementById('brandToneInput');
   const brandLanguageInput = document.getElementById('brandLanguageInput');
-  const brandTemplateInput = document.getElementById('brandTemplateInput');
   const brandAccentInput = document.getElementById('brandAccentInput');
+  const brandSecondaryInput = document.getElementById('brandSecondaryInput');
   const brandBannedInput = document.getElementById('brandBannedInput');
 
-  /** @type {{id:number,type:'image'|'video',url:string,el:HTMLImageElement|HTMLVideoElement,duration:number,title:string,subtitle:string}[]} */
-  let slides = [];
+  const QUALITY_BITRATES = { draft: 4_000_000, standard: 10_000_000, high: 20_000_000 };
+
+  /** @type {{id:number,title:string,subtitle:string,duration:number,composition:'split'|'full',sceneLeft:string,sceneRight:string}[]} */
+  let scenes = [];
   let nextId = 1;
-  let template = 'kenburns';
   let musicEl = null;
   let musicObjectUrl = null;
 
   let previewRAF = null;
   let previewStart = 0;
   let isExporting = false;
-  let pendingSuggestion = null;
 
   const BRAND_STORAGE_KEY = 'reelsBrandRules';
   const defaultBrandRules = {
@@ -66,8 +78,8 @@
     brandName: '',
     tone: '',
     language: 'Türkçe',
-    defaultTemplate: 'kenburns',
-    accentColor: '#fd1d1d',
+    accentColor: '#f5821f',
+    secondaryColor: '#0f9b8e',
     bannedWords: '',
   };
   let brandRules = loadBrandRules();
@@ -90,115 +102,110 @@
     }
   }
 
-  // ---------- Slide management ----------
-
-  function addFiles(fileList) {
-    [...fileList].forEach((file) => {
-      const isVideo = file.type.startsWith('video/');
-      const isImage = file.type.startsWith('image/');
-      if (!isVideo && !isImage) return;
-
-      const url = URL.createObjectURL(file);
-      const slide = {
-        id: nextId++,
-        type: isVideo ? 'video' : 'image',
-        url,
-        el: null,
-        duration: DEFAULT_IMAGE_DURATION,
-        title: '',
-        subtitle: '',
-      };
-
-      if (slides.length === 0 && pendingSuggestion) {
-        slide.title = pendingSuggestion.title;
-        slide.subtitle = pendingSuggestion.subtitle;
-        pendingSuggestion = null;
-      }
-
-      if (isImage) {
-        const img = new Image();
-        img.src = url;
-        slide.el = img;
-        slides.push(slide);
-        renderSlideList();
-        updateActionState();
-      } else {
-        const video = document.createElement('video');
-        video.src = url;
-        video.muted = true;
-        video.playsInline = true;
-        video.preload = 'metadata';
-        video.addEventListener('loadedmetadata', () => {
-          slide.duration = Math.min(video.duration || DEFAULT_IMAGE_DURATION, MAX_CLIP_DURATION);
-          renderSlideList();
-          updateActionState();
-        }, { once: true });
-        slide.el = video;
-        slides.push(slide);
-        renderSlideList();
-        updateActionState();
-      }
-    });
+  function palette() {
+    return {
+      orange: brandRules.accentColor || '#f5821f',
+      teal: brandRules.secondaryColor || '#0f9b8e',
+      ink: '#161616',
+      paper: '#f6f1e4',
+    };
   }
 
-  function removeSlide(id) {
-    const idx = slides.findIndex((s) => s.id === id);
-    if (idx === -1) return;
-    URL.revokeObjectURL(slides[idx].url);
-    slides.splice(idx, 1);
-    renderSlideList();
+  // ---------- Scene plan management ----------
+
+  function totalDuration() {
+    return scenes.reduce((sum, s) => sum + s.duration, 0);
+  }
+
+  function updateDurationHint() {
+    durationHint.textContent = `Toplam süre: ${totalDuration().toFixed(1)} sn`;
+  }
+
+  function updateActionState() {
+    const hasScenes = scenes.length > 0;
+    exportBtn.disabled = !hasScenes || isExporting;
+    playBtn.disabled = !hasScenes || isExporting;
+    scenesEmptyHint.hidden = hasScenes;
+    phoneEmpty.classList.toggle('hidden', hasScenes);
+    updateDurationHint();
+  }
+
+  function removeScene(id) {
+    scenes = scenes.filter((s) => s.id !== id);
+    renderSceneList();
     updateActionState();
+    drawAtTime(0);
   }
 
-  function moveSlide(id, dir) {
-    const idx = slides.findIndex((s) => s.id === id);
+  function moveScene(id, dir) {
+    const idx = scenes.findIndex((s) => s.id === id);
     const newIdx = idx + dir;
-    if (idx === -1 || newIdx < 0 || newIdx >= slides.length) return;
-    const [item] = slides.splice(idx, 1);
-    slides.splice(newIdx, 0, item);
-    renderSlideList();
+    if (idx === -1 || newIdx < 0 || newIdx >= scenes.length) return;
+    const [item] = scenes.splice(idx, 1);
+    scenes.splice(newIdx, 0, item);
+    renderSceneList();
+    drawAtTime(0);
   }
 
-  function renderSlideList() {
-    slideListEl.innerHTML = '';
-    slides.forEach((slide, i) => {
-      const li = document.createElement('li');
-      li.className = 'slide-item';
+  function sceneBadgeText(scene) {
+    if (scene.composition === 'split') {
+      return `${SCENE_LABELS[scene.sceneLeft]?.emoji || '✨'}${SCENE_LABELS[scene.sceneRight]?.emoji || ''}`;
+    }
+    return SCENE_LABELS[scene.sceneLeft]?.emoji || '✨';
+  }
 
-      const thumb = document.createElement(slide.type === 'video' ? 'video' : 'img');
-      thumb.className = 'slide-thumb';
-      thumb.src = slide.url;
-      if (slide.type === 'video') { thumb.muted = true; thumb.playsInline = true; }
+  function sceneDescription(scene) {
+    if (scene.composition === 'split') {
+      return `${SCENE_LABELS[scene.sceneLeft]?.label || '?'} / ${SCENE_LABELS[scene.sceneRight]?.label || '?'}`;
+    }
+    return SCENE_LABELS[scene.sceneLeft]?.label || '?';
+  }
+
+  function renderSceneList() {
+    sceneListEl.innerHTML = '';
+    scenes.forEach((scene, i) => {
+      const li = document.createElement('li');
+      li.className = 'scene-item';
+
+      const badge = document.createElement('div');
+      badge.className = 'scene-badge';
+      badge.textContent = sceneBadgeText(scene);
+      badge.title = sceneDescription(scene);
 
       const fields = document.createElement('div');
-      fields.className = 'slide-fields';
+      fields.className = 'scene-fields';
+
+      const desc = document.createElement('small');
+      desc.className = 'hint';
+      desc.style.margin = '0';
+      desc.textContent = sceneDescription(scene);
 
       const titleInput = document.createElement('input');
       titleInput.type = 'text';
-      titleInput.placeholder = `Başlık (slayt ${i + 1})`;
-      titleInput.value = slide.title;
-      titleInput.addEventListener('input', () => { slide.title = titleInput.value; });
+      titleInput.placeholder = `Başlık (sahne ${i + 1})`;
+      titleInput.value = scene.title;
+      titleInput.addEventListener('input', () => { scene.title = titleInput.value; drawAtTime(0); });
 
       const subInput = document.createElement('input');
       subInput.type = 'text';
       subInput.placeholder = 'Alt yazı (opsiyonel)';
-      subInput.value = slide.subtitle;
-      subInput.addEventListener('input', () => { slide.subtitle = subInput.value; });
+      subInput.value = scene.subtitle;
+      subInput.addEventListener('input', () => { scene.subtitle = subInput.value; drawAtTime(0); });
 
       const meta = document.createElement('div');
-      meta.className = 'slide-meta';
+      meta.className = 'scene-meta';
       const durLabel = document.createElement('span');
-      durLabel.textContent = slide.type === 'video' ? 'Klip:' : 'Süre:';
+      durLabel.textContent = 'Süre:';
       const durInput = document.createElement('input');
       durInput.type = 'number';
-      durInput.min = '0.5';
-      durInput.max = String(MAX_CLIP_DURATION);
+      durInput.min = String(MIN_SCENE_DURATION);
+      durInput.max = String(MAX_SCENE_DURATION);
       durInput.step = '0.5';
-      durInput.value = slide.duration.toFixed(1);
+      durInput.value = scene.duration.toFixed(1);
       durInput.addEventListener('input', () => {
         const v = parseFloat(durInput.value);
         if (!Number.isNaN(v) && v > 0) {
-          slide.duration = Math.min(v, MAX_CLIP_DURATION);
+          scene.duration = Math.min(Math.max(v, MIN_SCENE_DURATION), MAX_SCENE_DURATION);
           updateActionState();
         }
       });
@@ -206,63 +213,38 @@
       durUnit.textContent = 'sn';
       meta.append(durLabel, durInput, durUnit);
 
-      fields.append(titleInput, subInput, meta);
+      fields.append(desc, titleInput, subInput, meta);
 
       const actions = document.createElement('div');
-      actions.className = 'slide-actions';
+      actions.className = 'scene-actions';
       const upBtn = document.createElement('button');
       upBtn.className = 'icon-btn';
       upBtn.textContent = '↑';
       upBtn.type = 'button';
       upBtn.disabled = i === 0;
-      upBtn.addEventListener('click', () => moveSlide(slide.id, -1));
+      upBtn.addEventListener('click', () => moveScene(scene.id, -1));
 
       const downBtn = document.createElement('button');
       downBtn.className = 'icon-btn';
       downBtn.textContent = '↓';
       downBtn.type = 'button';
-      downBtn.disabled = i === slides.length - 1;
-      downBtn.addEventListener('click', () => moveSlide(slide.id, 1));
+      downBtn.disabled = i === scenes.length - 1;
+      downBtn.addEventListener('click', () => moveScene(scene.id, 1));
 
       const delBtn = document.createElement('button');
       delBtn.className = 'icon-btn';
       delBtn.textContent = '✕';
       delBtn.type = 'button';
-      delBtn.addEventListener('click', () => removeSlide(slide.id));
+      delBtn.addEventListener('click', () => removeScene(scene.id));
 
       actions.append(upBtn, downBtn, delBtn);
-      li.append(thumb, fields, actions);
-      slideListEl.appendChild(li);
+      li.append(badge, fields, actions);
+      sceneListEl.appendChild(li);
     });
-
-    phoneEmpty.classList.toggle('hidden', slides.length > 0);
-    updateDurationHint();
+    updateActionState();
   }
 
-  function totalDuration() {
-    return slides.reduce((sum, s) => sum + s.duration, 0);
-  }
-
-  function updateDurationHint() {
-    const total = totalDuration();
-    durationHint.textContent = `Toplam süre: ${total.toFixed(1)} sn`;
-  }
-
-  function updateActionState() {
-    const hasSlides = slides.length > 0;
-    exportBtn.disabled = !hasSlides || isExporting;
-    playBtn.disabled = !hasSlides || isExporting;
-    updateDurationHint();
-  }
-
-  // ---------- Uploads ----------
-
-  fileInput.addEventListener('change', (e) => addFiles(e.target.files));
-  ['dragover'].forEach((evt) =>
-    dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); }));
-  ['dragleave', 'drop'].forEach((evt) =>
-    dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); }));
-  dropzone.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
+  // ---------- Music ----------
 
   musicInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -289,38 +271,415 @@
     if (musicEl) musicEl.volume = parseFloat(musicVolume.value);
   });
 
-  // ---------- Templates ----------
-
-  templateGrid.addEventListener('click', (e) => {
-    const btn = e.target.closest('.template-option');
-    if (!btn) return;
-    setActiveTemplate(btn.dataset.template);
-  });
-
-  function setActiveTemplate(name) {
-    template = name;
-    [...templateGrid.children].forEach((c) => c.classList.toggle('active', c.dataset.template === name));
-  }
-
-  // ---------- Drawing ----------
+  // ---------- Drawing helpers ----------
 
   function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
   function clamp01(t) { return Math.max(0, Math.min(1, t)); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
 
-  function drawCover(el, w, h, extraScale = 1, offsetX = 0, offsetY = 0) {
-    const naturalW = el.videoWidth || el.naturalWidth || w;
-    const naturalH = el.videoHeight || el.naturalHeight || h;
-    if (!naturalW || !naturalH) return;
-    const scale = Math.max(w / naturalW, h / naturalH) * extraScale;
-    const drawW = naturalW * scale;
-    const drawH = naturalH * scale;
-    const dx = (w - drawW) / 2 + offsetX;
-    const dy = (h - drawH) / 2 + offsetY;
-    ctx.drawImage(el, dx, dy, drawW, drawH);
+  function roundRectPath(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
   }
 
+  function strokeFill(c, fillColor, strokeColor, lineWidth) {
+    if (fillColor) { c.fillStyle = fillColor; c.fill(); }
+    if (strokeColor) { c.strokeStyle = strokeColor; c.lineWidth = lineWidth; c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke(); }
+  }
+
+  // ---------- Scene library (flat vector illustrations) ----------
+
+  const SCENE_LIBRARY = {
+    'car-driver': drawCarDriverScene,
+    'hand-sensor': drawHandSensorScene,
+    'engine-warning': drawEngineWarningScene,
+    'wrench-tool': drawWrenchToolScene,
+    'dashboard-light': drawDashboardScene,
+    'checkmark-fixed': drawCheckmarkScene,
+    'abstract-shapes': drawAbstractScene,
+  };
+
+  function drawCarDriverScene(c, region, t, pal) {
+    const { x, y, w, h } = region;
+    const outline = pal.ink;
+    const lw = Math.max(6, w * 0.018);
+    const jitterX = Math.sin(t * 42) * w * 0.006 + Math.sin(t * 13) * w * 0.003;
+    const jitterY = Math.cos(t * 37) * h * 0.003;
+
+    c.save();
+    c.translate(x + w / 2 + jitterX, y + h * 0.62 + jitterY);
+
+    // ground line
+    c.beginPath();
+    c.moveTo(-w * 0.46, h * 0.24);
+    c.lineTo(w * 0.46, h * 0.24);
+    c.strokeStyle = outline;
+    c.lineWidth = lw * 0.6;
+    c.stroke();
+
+    const bodyW = w * 0.82;
+    const bodyH = h * 0.34;
+
+    // car body (rounded blob via bezier)
+    c.beginPath();
+    c.moveTo(-bodyW / 2, h * 0.08);
+    c.bezierCurveTo(-bodyW / 2, -bodyH * 0.5, -bodyW * 0.32, -bodyH * 0.95, -bodyW * 0.08, -bodyH * 0.95);
+    c.lineTo(bodyW * 0.14, -bodyH * 0.95);
+    c.bezierCurveTo(bodyW * 0.34, -bodyH * 0.95, bodyW * 0.42, -bodyH * 0.55, bodyW / 2, h * 0.02);
+    c.bezierCurveTo(bodyW * 0.5, h * 0.05, bodyW / 2, h * 0.14, bodyW * 0.44, h * 0.14);
+    c.lineTo(-bodyW * 0.44, h * 0.14);
+    c.bezierCurveTo(-bodyW / 2, h * 0.14, -bodyW / 2, h * 0.08, -bodyW / 2, h * 0.08);
+    c.closePath();
+    strokeFill(c, pal.teal, outline, lw);
+
+    // window (paper) showing driver
+    const winCX = -bodyW * 0.05;
+    const winCY = -bodyH * 0.55;
+    roundRectPath(c, winCX - bodyW * 0.22, winCY - bodyH * 0.28, bodyW * 0.42, bodyH * 0.5, bodyW * 0.06);
+    strokeFill(c, pal.paper, outline, lw * 0.8);
+
+    // driver head
+    const headR = bodyH * 0.16;
+    c.beginPath();
+    c.arc(winCX, winCY, headR, 0, Math.PI * 2);
+    strokeFill(c, pal.paper, outline, lw * 0.7);
+
+    // worried face: angled brows + dot eyes + curved-down mouth
+    c.beginPath();
+    c.moveTo(winCX - headR * 0.55, winCY - headR * 0.15);
+    c.lineTo(winCX - headR * 0.15, winCY - headR * 0.35);
+    c.moveTo(winCX + headR * 0.15, winCY - headR * 0.35);
+    c.lineTo(winCX + headR * 0.55, winCY - headR * 0.15);
+    c.strokeStyle = outline;
+    c.lineWidth = lw * 0.45;
+    c.stroke();
+
+    c.beginPath();
+    c.arc(winCX - headR * 0.3, winCY, headR * 0.09, 0, Math.PI * 2);
+    c.arc(winCX + headR * 0.3, winCY, headR * 0.09, 0, Math.PI * 2);
+    c.fillStyle = outline;
+    c.fill();
+
+    c.beginPath();
+    c.arc(winCX, winCY + headR * 0.55, headR * 0.32, Math.PI * 1.15, Math.PI * 1.85);
+    c.strokeStyle = outline;
+    c.lineWidth = lw * 0.4;
+    c.stroke();
+
+    // wheels
+    [-bodyW * 0.28, bodyW * 0.26].forEach((wx) => {
+      c.beginPath();
+      c.arc(wx, h * 0.14, bodyH * 0.24, 0, Math.PI * 2);
+      strokeFill(c, outline, outline, lw * 0.4);
+      c.beginPath();
+      c.arc(wx, h * 0.14, bodyH * 0.1, 0, Math.PI * 2);
+      strokeFill(c, pal.orange, null, 0);
+    });
+
+    // shake lines near hood, flicker with jitter phase
+    const shakeAlpha = 0.35 + 0.35 * Math.abs(Math.sin(t * 40));
+    c.globalAlpha = shakeAlpha;
+    c.strokeStyle = pal.orange;
+    c.lineWidth = lw * 0.5;
+    [0.18, 0.3].forEach((f, i) => {
+      c.beginPath();
+      c.moveTo(bodyW * 0.5 + w * 0.02, -bodyH * f + (i * 10));
+      c.quadraticCurveTo(bodyW * 0.62, -bodyH * f, bodyW * 0.58 + w * 0.05, -bodyH * f + 14);
+      c.stroke();
+    });
+    c.globalAlpha = 1;
+
+    c.restore();
+  }
+
+  function drawHandSensorScene(c, region, t, pal) {
+    const { x, y, w, h } = region;
+    const outline = pal.ink;
+    const lw = Math.max(6, w * 0.018);
+    const bob = Math.sin(t * 1.6) * h * 0.012;
+
+    c.save();
+    c.translate(x + w / 2, y + h * 0.66 + bob);
+
+    // hand (palm + thumb + four rounded finger bumps)
+    const palmW = w * 0.62;
+    const palmH = h * 0.26;
+    roundRectPath(c, -palmW / 2, 0, palmW, palmH, palmH * 0.35);
+    strokeFill(c, pal.paper, outline, lw);
+
+    // fingers
+    for (let i = 0; i < 4; i += 1) {
+      const fx = -palmW * 0.34 + i * (palmW * 0.23);
+      roundRectPath(c, fx, -palmH * 0.55, palmW * 0.17, palmH * 0.65, palmW * 0.08);
+      strokeFill(c, pal.paper, outline, lw * 0.8);
+    }
+
+    // thumb
+    c.save();
+    c.translate(-palmW * 0.5, palmH * 0.55);
+    c.rotate(-0.6);
+    roundRectPath(c, -palmW * 0.09, -palmH * 0.35, palmW * 0.18, palmH * 0.6, palmW * 0.09);
+    strokeFill(c, pal.paper, outline, lw * 0.8);
+    c.restore();
+
+    // sensor part floating just above palm
+    const sensorBob = Math.sin(t * 2.2) * h * 0.006;
+    const sy = -palmH * 1.15 + sensorBob;
+    roundRectPath(c, -palmW * 0.16, sy - palmH * 0.22, palmW * 0.32, palmH * 0.4, palmH * 0.12);
+    strokeFill(c, pal.teal, outline, lw * 0.9);
+
+    roundRectPath(c, -palmW * 0.08, sy - palmH * 0.36, palmW * 0.16, palmH * 0.16, palmH * 0.05);
+    strokeFill(c, pal.orange, outline, lw * 0.6);
+
+    [-palmW * 0.09, palmW * 0.01].forEach((px) => {
+      c.beginPath();
+      c.rect(px, sy + palmH * 0.16, palmW * 0.04, palmH * 0.14);
+      strokeFill(c, outline, null, 0);
+    });
+
+    // blinking status dot
+    const blink = 0.4 + 0.6 * Math.max(0, Math.sin(t * 6));
+    c.globalAlpha = blink;
+    c.beginPath();
+    c.arc(0, sy - palmH * 0.02, palmH * 0.06, 0, Math.PI * 2);
+    c.fillStyle = pal.orange;
+    c.fill();
+    c.globalAlpha = 1;
+
+    // soft inspection dashes radiating from sensor
+    const pulse = clamp01(Math.sin(t * 2) * 0.5 + 0.5);
+    c.globalAlpha = 0.25 + 0.35 * pulse;
+    c.strokeStyle = pal.orange;
+    c.lineWidth = lw * 0.4;
+    for (let a = 0; a < 6; a += 1) {
+      const ang = (a / 6) * Math.PI * 2;
+      const r1 = palmW * (0.28 + pulse * 0.04);
+      const r2 = r1 + palmW * 0.06;
+      c.beginPath();
+      c.moveTo(Math.cos(ang) * r1, sy + Math.sin(ang) * r1 * 0.6);
+      c.lineTo(Math.cos(ang) * r2, sy + Math.sin(ang) * r2 * 0.6);
+      c.stroke();
+    }
+    c.globalAlpha = 1;
+
+    c.restore();
+  }
+
+  function drawEngineWarningScene(c, region, t, pal) {
+    const { x, y, w, h } = region;
+    const outline = pal.ink;
+    const lw = Math.max(6, w * 0.018);
+    const pulse = 1 + 0.05 * Math.sin(t * 4);
+
+    c.save();
+    c.translate(x + w / 2, y + h * 0.6);
+
+    const blockW = w * 0.66;
+    const blockH = h * 0.34;
+    roundRectPath(c, -blockW / 2, -blockH * 0.1, blockW, blockH, blockW * 0.08);
+    strokeFill(c, pal.teal, outline, lw);
+
+    roundRectPath(c, -blockW * 0.32, -blockH * 0.5, blockW * 0.64, blockH * 0.45, blockW * 0.06);
+    strokeFill(c, pal.teal, outline, lw * 0.8);
+
+    // bolts
+    [[-blockW * 0.3, blockH * 0.1], [blockW * 0.3, blockH * 0.1], [-blockW * 0.3, blockH * 0.65], [blockW * 0.3, blockH * 0.65]]
+      .forEach(([bx, by]) => {
+        c.beginPath();
+        c.arc(bx, by, blockW * 0.035, 0, Math.PI * 2);
+        strokeFill(c, pal.orange, outline, lw * 0.4);
+      });
+
+    // warning triangle above, pulsing
+    c.save();
+    c.translate(0, -blockH * 0.95);
+    c.scale(pulse, pulse);
+    const triR = blockW * 0.26;
+    c.beginPath();
+    c.moveTo(0, -triR);
+    c.lineTo(triR * 0.9, triR * 0.7);
+    c.lineTo(-triR * 0.9, triR * 0.7);
+    c.closePath();
+    strokeFill(c, pal.orange, outline, lw);
+
+    c.beginPath();
+    c.rect(-lw * 0.4, -triR * 0.35, lw * 0.8, triR * 0.55);
+    c.fillStyle = outline;
+    c.fill();
+    c.beginPath();
+    c.arc(0, triR * 0.42, lw * 0.5, 0, Math.PI * 2);
+    c.fillStyle = outline;
+    c.fill();
+    c.restore();
+
+    c.restore();
+  }
+
+  function drawWrenchToolScene(c, region, t, pal) {
+    const { x, y, w, h } = region;
+    const outline = pal.ink;
+    const lw = Math.max(6, w * 0.018);
+    const rot = Math.sin(t * 1.4) * 0.12;
+
+    c.save();
+    c.translate(x + w / 2, y + h * 0.58);
+
+    // bolt/nut (hexagon)
+    c.save();
+    c.translate(w * 0.14, h * 0.1);
+    c.rotate(t * 0.3);
+    const hexR = w * 0.13;
+    c.beginPath();
+    for (let i = 0; i < 6; i += 1) {
+      const ang = (i / 6) * Math.PI * 2;
+      const px = Math.cos(ang) * hexR;
+      const py = Math.sin(ang) * hexR;
+      if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+    }
+    c.closePath();
+    strokeFill(c, pal.orange, outline, lw * 0.8);
+    c.beginPath();
+    c.arc(0, 0, hexR * 0.4, 0, Math.PI * 2);
+    strokeFill(c, pal.paper, outline, lw * 0.5);
+    c.restore();
+
+    // wrench
+    c.save();
+    c.rotate(rot - 0.35);
+    const shaftLen = w * 0.5;
+    const shaftW = h * 0.045;
+    roundRectPath(c, -shaftLen / 2, -shaftW / 2, shaftLen, shaftW, shaftW / 2);
+    strokeFill(c, pal.teal, outline, lw * 0.8);
+
+    [-1, 1].forEach((side) => {
+      c.save();
+      c.translate(side * shaftLen / 2, 0);
+      c.beginPath();
+      c.arc(0, 0, shaftW * 1.6, Math.PI * 0.15, Math.PI * 1.85);
+      c.lineWidth = shaftW * 0.9;
+      c.strokeStyle = pal.teal;
+      c.lineCap = 'round';
+      c.stroke();
+      c.strokeStyle = outline;
+      c.lineWidth = lw * 0.7;
+      c.stroke();
+      c.restore();
+    });
+    c.restore();
+
+    c.restore();
+  }
+
+  function drawDashboardScene(c, region, t, pal) {
+    const { x, y, w, h } = region;
+    const outline = pal.ink;
+    const lw = Math.max(6, w * 0.018);
+
+    c.save();
+    c.translate(x + w / 2, y + h * 0.55);
+
+    const panelW = w * 0.78;
+    const panelH = h * 0.32;
+    roundRectPath(c, -panelW / 2, -panelH / 2, panelW, panelH, panelW * 0.08);
+    strokeFill(c, pal.teal, outline, lw);
+
+    // two gauges
+    [-panelW * 0.24, panelW * 0.24].forEach((gx) => {
+      const gr = panelW * 0.16;
+      c.beginPath();
+      c.arc(gx, panelH * 0.05, gr, Math.PI, Math.PI * 2);
+      c.strokeStyle = pal.paper;
+      c.lineWidth = gr * 0.35;
+      c.stroke();
+      const needleAngle = Math.PI + Math.PI * (0.3 + 0.15 * Math.sin(t * 2 + gx));
+      c.beginPath();
+      c.moveTo(gx, panelH * 0.05);
+      c.lineTo(gx + Math.cos(needleAngle) * gr * 0.8, panelH * 0.05 + Math.sin(needleAngle) * gr * 0.8);
+      c.strokeStyle = pal.orange;
+      c.lineWidth = lw * 0.5;
+      c.stroke();
+    });
+
+    // blinking check-engine icon, centered
+    const blink = 0.35 + 0.65 * Math.max(0, Math.sin(t * 5));
+    c.save();
+    c.globalAlpha = blink;
+    c.translate(0, -panelH * 0.28);
+    c.beginPath();
+    c.arc(0, 0, panelW * 0.07, 0, Math.PI * 2);
+    strokeFill(c, pal.orange, outline, lw * 0.5);
+    c.beginPath();
+    roundRectPath(c, -panelW * 0.03, -panelW * 0.02, panelW * 0.06, panelW * 0.045, panelW * 0.01);
+    strokeFill(c, outline, null, 0);
+    c.restore();
+
+    c.restore();
+  }
+
+  function drawCheckmarkScene(c, region, t, pal, sceneDuration) {
+    const { x, y, w, h } = region;
+    const outline = pal.ink;
+    const lw = Math.max(8, w * 0.024);
+    const drawIn = clamp01(t / 0.6);
+    const eased = easeOutCubic(drawIn);
+    const scale = lerp(0.7, 1, eased);
+
+    c.save();
+    c.translate(x + w / 2, y + h * 0.55);
+    c.scale(scale, scale);
+
+    const r = Math.min(w, h) * 0.24;
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    strokeFill(c, pal.teal, outline, lw);
+
+    const checkLen = r * 2.6;
+    c.beginPath();
+    c.moveTo(-r * 0.45, r * 0.05);
+    c.lineTo(-r * 0.12, r * 0.35);
+    c.lineTo(r * 0.5, -r * 0.32);
+    c.strokeStyle = pal.orange;
+    c.lineWidth = lw * 0.9;
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    c.setLineDash([checkLen]);
+    c.lineDashOffset = checkLen * (1 - eased);
+    c.stroke();
+    c.setLineDash([]);
+
+    c.restore();
+  }
+
+  function drawAbstractScene(c, region, t, pal) {
+    const { x, y, w, h } = region;
+    const outline = pal.ink;
+    const lw = Math.max(6, w * 0.016);
+    const cx = x + w / 2;
+    const cy = y + h * 0.55;
+
+    const blobs = [
+      { r: w * 0.22, dx: -0.18, dy: -0.05, color: pal.teal, speed: 0.7 },
+      { r: w * 0.16, dx: 0.16, dy: 0.08, color: pal.orange, speed: 0.9 },
+      { r: w * 0.11, dx: 0.02, dy: -0.22, color: pal.paper, speed: 1.1 },
+    ];
+    blobs.forEach((b) => {
+      const bx = cx + b.dx * w + Math.sin(t * b.speed) * w * 0.02;
+      const by = cy + b.dy * h + Math.cos(t * b.speed * 0.8) * h * 0.015;
+      c.beginPath();
+      c.arc(bx, by, b.r, 0, Math.PI * 2);
+      strokeFill(c, b.color, outline, lw);
+    });
+  }
+
+  // ---------- Text overlay ----------
+
   function wrapText(text, maxWidth, fontSize) {
-    ctx.font = `600 ${fontSize}px -apple-system, Helvetica, Arial, sans-serif`;
+    ctx.font = `700 ${fontSize}px -apple-system, Helvetica, Arial, sans-serif`;
     const words = text.split(' ');
     const lines = [];
     let line = '';
@@ -337,73 +696,82 @@
     return lines;
   }
 
-  function drawTextOverlay(slide, localT) {
-    if (!slide.title && !slide.subtitle) return;
+  function drawTextOverlay(scene, localT, pal) {
+    if (!scene.title && !scene.subtitle) return;
     const enter = clamp01(localT / 0.4);
     const eased = easeOutCubic(enter);
-    const slideUp = (1 - eased) * 40;
+    const slideUp = (1 - eased) * 30;
     const alpha = eased;
 
     const maxWidth = CANVAS_W - 140;
-    const lines = slide.title ? wrapText(slide.title, maxWidth, 64) : [];
-    const subLines = slide.subtitle ? wrapText(slide.subtitle, maxWidth, 38) : [];
+    const lines = scene.title ? wrapText(scene.title, maxWidth, 60) : [];
+    const subLines = scene.subtitle ? wrapText(scene.subtitle, maxWidth, 36) : [];
 
-    const lineHeight = 74;
-    const subLineHeight = 46;
-    const blockHeight = lines.length * lineHeight + (subLines.length ? subLines.length * subLineHeight + 16 : 0);
-    const bottomPad = 220;
+    const lineHeight = 70;
+    const subLineHeight = 44;
+    const blockHeight = lines.length * lineHeight + (subLines.length ? subLines.length * subLineHeight + 14 : 0);
+    const bottomPad = 200;
     let y = CANVAS_H - bottomPad - blockHeight + slideUp;
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    const boxTop = y - 24;
-    const boxHeight = blockHeight + 48;
-    const gradient = ctx.createLinearGradient(0, boxTop, 0, boxTop + boxHeight + 100);
-    gradient.addColorStop(0, 'rgba(0,0,0,0)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0.55)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, boxTop, CANVAS_W, boxHeight + 100);
 
     if (lines.length) {
-      ctx.fillStyle = brandRules.accentColor || '#fd1d1d';
-      const tagWidth = 64;
-      ctx.fillRect(CANVAS_W / 2 - tagWidth / 2, boxTop + 6, tagWidth, 6);
+      ctx.fillStyle = pal.orange;
+      const tagWidth = 60;
+      ctx.fillRect(CANVAS_W / 2 - tagWidth / 2, y - 26, tagWidth, 7);
     }
 
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 12;
-    ctx.font = '700 64px -apple-system, Helvetica, Arial, sans-serif';
+    ctx.fillStyle = pal.ink;
+    ctx.font = '700 60px -apple-system, Helvetica, Arial, sans-serif';
     lines.forEach((line) => {
-      ctx.fillText(line, CANVAS_W / 2, y + 50);
+      ctx.fillText(line, CANVAS_W / 2, y + 46);
       y += lineHeight;
     });
 
     if (subLines.length) {
-      y += 10;
-      ctx.font = '500 38px -apple-system, Helvetica, Arial, sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      y += 8;
+      ctx.font = '500 36px -apple-system, Helvetica, Arial, sans-serif';
+      ctx.fillStyle = 'rgba(22,22,22,0.75)';
       subLines.forEach((line) => {
-        ctx.fillText(line, CANVAS_W / 2, y + 30);
+        ctx.fillText(line, CANVAS_W / 2, y + 28);
         y += subLineHeight;
       });
     }
     ctx.restore();
   }
 
-  function idleTransform(t, duration) {
-    const progress = clamp01(t / duration);
-    if (template === 'kenburns') {
-      const scale = 1 + progress * 0.12;
-      const offsetX = -progress * 30;
-      const offsetY = -progress * 20;
-      return { scale, offsetX, offsetY };
+  // ---------- Composition ----------
+
+  function drawSceneFrame(scene, localT) {
+    const pal = palette();
+    ctx.fillStyle = pal.paper;
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    const PAD = 60;
+    if (scene.composition === 'split') {
+      const halfW = CANVAS_W / 2;
+      const region = { x: PAD, y: CANVAS_H * 0.26, w: halfW - PAD * 1.4, h: CANVAS_H * 0.42 };
+      const regionR = { x: halfW + PAD * 0.4, y: CANVAS_H * 0.26, w: halfW - PAD * 1.4, h: CANVAS_H * 0.42 };
+      ctx.save();
+      ctx.strokeStyle = 'rgba(22,22,22,0.15)';
+      ctx.lineWidth = 4;
+      ctx.setLineDash([14, 14]);
+      ctx.beginPath();
+      ctx.moveTo(halfW, CANVAS_H * 0.22);
+      ctx.lineTo(halfW, CANVAS_H * 0.72);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      (SCENE_LIBRARY[scene.sceneLeft] || drawAbstractScene)(ctx, region, localT, pal, scene.duration);
+      (SCENE_LIBRARY[scene.sceneRight] || drawAbstractScene)(ctx, regionR, localT, pal, scene.duration);
+    } else {
+      const region = { x: PAD, y: CANVAS_H * 0.2, w: CANVAS_W - PAD * 2, h: CANVAS_H * 0.5 };
+      (SCENE_LIBRARY[scene.sceneLeft] || drawAbstractScene)(ctx, region, localT, pal, scene.duration);
     }
-    if (template === 'slide') {
-      return { scale: 1.02, offsetX: 0, offsetY: 0 };
-    }
-    return { scale: 1, offsetX: 0, offsetY: 0 };
+
+    drawTextOverlay(scene, localT, pal);
   }
 
   /**
@@ -411,69 +779,33 @@
    */
   function drawAtTime(tMs) {
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-    ctx.fillStyle = '#000';
+    const pal = palette();
+    ctx.fillStyle = pal.paper;
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-    if (!slides.length) return;
+    if (!scenes.length) return;
 
     let cursor = 0;
     let idx = 0;
     const tSec = tMs / 1000;
-    while (idx < slides.length - 1 && tSec >= cursor + slides[idx].duration) {
-      cursor += slides[idx].duration;
+    while (idx < scenes.length - 1 && tSec >= cursor + scenes[idx].duration) {
+      cursor += scenes[idx].duration;
       idx += 1;
     }
-    const slide = slides[idx];
+    const scene = scenes[idx];
     const localT = Math.max(0, tSec - cursor);
-    const next = slides[idx + 1];
-    const timeToEnd = slide.duration - localT;
-    const transitioning = template !== 'snap' && next && timeToEnd <= TRANSITION_MS / 1000;
+    const next = scenes[idx + 1];
+    const timeToEnd = scene.duration - localT;
+    const transitioning = next && timeToEnd <= TRANSITION_MS / 1000;
     const transitionProgress = transitioning ? 1 - timeToEnd / (TRANSITION_MS / 1000) : 0;
 
-    drawSlideContent(slide, localT);
+    drawSceneFrame(scene, localT);
     if (transitioning) {
       ctx.save();
-      if (template === 'slide') {
-        ctx.globalAlpha = 1;
-        const offset = easeOutCubic(transitionProgress) * CANVAS_W;
-        ctx.save();
-        ctx.translate(-offset, 0);
-        ctx.fillStyle = '#000';
-        ctx.fillRect(offset, 0, CANVAS_W, CANVAS_H);
-        drawSlideContentAt(next, 0, CANVAS_W, 0);
-        ctx.restore();
-      } else {
-        ctx.globalAlpha = easeOutCubic(transitionProgress);
-        drawSlideContent(next, 0);
-      }
+      ctx.globalAlpha = easeOutCubic(transitionProgress);
+      drawSceneFrame(next, 0);
       ctx.restore();
     }
-
-    if (!transitioning || template !== 'slide') {
-      drawTextOverlay(slide, localT);
-    }
-  }
-
-  function drawSlideContent(slide, localT) {
-    drawSlideContentAt(slide, localT, 0, 0);
-  }
-
-  function drawSlideContentAt(slide, localT, translateX, translateY) {
-    if (!slide || !slide.el) return;
-    const ready = slide.type === 'image'
-      ? slide.el.complete && slide.el.naturalWidth
-      : slide.el.readyState >= 2;
-    ctx.save();
-    ctx.translate(translateX, translateY);
-    if (!ready) {
-      ctx.fillStyle = '#111';
-      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-      ctx.restore();
-      return;
-    }
-    const { scale, offsetX, offsetY } = idleTransform(localT, slide.duration);
-    drawCover(slide.el, CANVAS_W, CANVAS_H, scale, offsetX, offsetY);
-    ctx.restore();
   }
 
   // ---------- Preview playback ----------
@@ -481,14 +813,13 @@
   function stopPreview() {
     if (previewRAF) cancelAnimationFrame(previewRAF);
     previewRAF = null;
-    slides.forEach((s) => { if (s.type === 'video') s.el.pause(); });
     playBtn.textContent = '▶ Önizlemeyi Oynat';
-    playBtn.disabled = slides.length === 0;
+    playBtn.disabled = scenes.length === 0;
     stopBtn.disabled = true;
   }
 
   function startPreview() {
-    if (!slides.length) return;
+    if (!scenes.length) return;
     previewStart = performance.now();
     playBtn.textContent = '⏸ Oynatılıyor…';
     stopBtn.disabled = false;
@@ -503,26 +834,9 @@
         return;
       }
       drawAtTime(elapsed);
-      syncActiveVideo(elapsed);
       previewRAF = requestAnimationFrame(loop);
     };
     previewRAF = requestAnimationFrame(loop);
-  }
-
-  function syncActiveVideo(tMs) {
-    let cursor = 0;
-    const tSec = tMs / 1000;
-    for (const slide of slides) {
-      const within = tSec >= cursor && tSec < cursor + slide.duration;
-      if (slide.type === 'video') {
-        if (within) {
-          if (slide.el.paused) slide.el.play().catch(() => {});
-        } else if (!slide.el.paused) {
-          slide.el.pause();
-        }
-      }
-      cursor += slide.duration;
-    }
   }
 
   playBtn.addEventListener('click', () => {
@@ -545,7 +859,7 @@
   }
 
   async function startExport() {
-    if (!slides.length || isExporting) return;
+    if (!scenes.length || isExporting) return;
     if (!window.MediaRecorder) {
       statusText.textContent = 'Bu tarayıcı video kaydını desteklemiyor. Güncel bir Chrome/Edge deneyin.';
       return;
@@ -560,6 +874,7 @@
     statusText.textContent = 'Hazırlanıyor…';
 
     const fps = parseInt(fpsSelect.value, 10);
+    const bitrate = QUALITY_BITRATES[qualitySelect.value] || QUALITY_BITRATES.standard;
     const total = totalDuration() * 1000;
     const videoStream = canvas.captureStream(fps);
     const tracks = [...videoStream.getVideoTracks()];
@@ -579,7 +894,7 @@
 
     const mimeType = pickMimeType();
     const combined = new MediaStream(tracks);
-    const recorder = new MediaRecorder(combined, mimeType ? { mimeType, videoBitsPerSecond: 10_000_000 } : undefined);
+    const recorder = new MediaRecorder(combined, mimeType ? { mimeType, videoBitsPerSecond: bitrate } : undefined);
     const chunks = [];
     recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
 
@@ -609,7 +924,6 @@
         return;
       }
       drawAtTime(elapsed);
-      syncActiveVideo(elapsed);
       progressBar.style.width = `${Math.min(100, (elapsed / total) * 100)}%`;
       statusText.textContent = `Kaydediliyor… ${(elapsed / 1000).toFixed(1)} / ${(total / 1000).toFixed(1)} sn`;
       requestAnimationFrame(tick);
@@ -626,8 +940,8 @@
     brandNameInput.value = brandRules.brandName;
     brandToneInput.value = brandRules.tone;
     brandLanguageInput.value = brandRules.language;
-    brandTemplateInput.value = brandRules.defaultTemplate;
     brandAccentInput.value = brandRules.accentColor;
+    brandSecondaryInput.value = brandRules.secondaryColor;
     brandBannedInput.value = brandRules.bannedWords;
   }
 
@@ -644,43 +958,65 @@
       brandName: brandNameInput.value.trim(),
       tone: brandToneInput.value.trim(),
       language: brandLanguageInput.value,
-      defaultTemplate: brandTemplateInput.value,
       accentColor: brandAccentInput.value,
+      secondaryColor: brandSecondaryInput.value,
       bannedWords: brandBannedInput.value.trim(),
     };
     saveBrandRules();
     drawAtTime(0);
   });
 
-  // ---------- AI-assisted fill (Claude) ----------
+  // ---------- AI-driven scene planning (Claude) ----------
 
   function buildBrandSystemPrompt(rules) {
+    const sceneDocs = SCENE_IDS.map((id) => `  - "${id}": ${SCENE_DESCRIPTIONS[id]}`).join('\n');
     const lines = [
-      'Sen bir Instagram Reels video oluşturucu uygulaması için içerik asistanısın.',
-      'Kullanıcının kısa isteğinden bir reels başlığı, kısa bir alt yazı ve en uygun geçiş şablonunu seç.',
-      'Kurallar:',
-      '- title: en fazla 8 kelime, dikkat çekici, ünlem/emoji kullanma.',
+      'Sen bir Instagram Reels video oluşturucu için sahne planlama asistanısın.',
+      'Video tamamen sabit bir flat vector illüstrasyon kütüphanesinden çizilir — fotoğraf/video yoktur.',
+      'Kesinlikle sadece şu 7 sahne kimliğinden birini kullanabilirsin (başka bir şey uydurma):',
+      sceneDocs,
+      '',
+      'Görsel stil (kod tarafında sabit, senin ayarlaman gerekmiyor): flat vector, kalın siyah kontur, teal ve turuncu düz renkler, gölgesiz, sade arka plan.',
+      '',
+      'Kullanıcının isteğinden 1 ile 4 arası sahneden oluşan bir video planı oluştur:',
+      '- Her sahne "composition" alanında "split" (iki çizim yan yana) veya "full" (tek çizim ortada) olmalı.',
+      '- "split" seçersen sceneLeft ve sceneRight FARKLI iki sahne kimliği olmalı.',
+      '- "full" seçersen sceneLeft kullanılacak sahnedir; sceneRight yine geçerli bir kimlik olmalı ama görselde kullanılmaz (sceneLeft ile aynısını yazabilirsin).',
+      '- "checkmark-fixed" genelde son sahne olarak iyi çalışır (çözüm/tamamlanma hissi verir).',
+      '- title: en fazla 7 kelime, dikkat çekici, ünlem/emoji kullanma.',
       '- subtitle: en fazla 12 kelime, tamamlayıcı bilgi; gerekmiyorsa boş bırakabilirsin.',
-      '- template: sadece "kenburns" (yavaş yakınlaşma), "slide" (yandan kayma) veya "snap" (net kesmeler) değerlerinden biri olmalı.',
+      '- duration: 2 ile 8 saniye arası (saniye, sayı).',
     ];
     if (rules.brandName) lines.push(`- Marka adı: ${rules.brandName}. Metinlerde doğal şekilde geçebilir ama zorunlu değil.`);
     if (rules.tone) lines.push(`- Ton: ${rules.tone} olmalı.`);
     lines.push(`- Dil: ${rules.language || 'Türkçe'} kullan.`);
-    if (rules.defaultTemplate) lines.push(`- Kullanıcının isteği aksini belirtmedikçe varsayılan şablon olarak "${rules.defaultTemplate}" tercih et.`);
     if (rules.bannedWords) lines.push(`- Şu kelimeleri kesinlikle kullanma: ${rules.bannedWords}.`);
     return lines.join('\n');
   }
 
-  function applySuggestion(suggestion) {
-    setActiveTemplate(suggestion.template);
-    if (slides.length > 0) {
-      slides[0].title = suggestion.title;
-      slides[0].subtitle = suggestion.subtitle;
-      renderSlideList();
-      drawAtTime(0);
-    } else {
-      pendingSuggestion = suggestion;
-    }
+  const SCENE_DESCRIPTIONS = {
+    'car-driver': 'Direksiyondaki endişeli sürücüyle birlikte hafifçe titreyen bir araba çizimi — araç arızası/sorun anlatımı için.',
+    'hand-sensor': 'Küçük bir motor parçasını/sensörü tutan bir el çizimi — parça inceleme, değiştirme veya elde tutma anlatımı için.',
+    'engine-warning': 'Üzerinde nabız gibi atan bir uyarı üçgeni olan motor bloğu çizimi — arıza/uyarı anlatımı için.',
+    'wrench-tool': 'Dönen bir cıvata/somun ve anahtar çizimi — tamir, bakım, montaj anlatımı için.',
+    'dashboard-light': 'Yanıp sönen bir arıza ikonu olan gösterge paneli çizimi — uyarı ışığı, teşhis anlatımı için.',
+    'checkmark-fixed': 'Büyük, çizilerek beliren bir onay işareti — sorunun çözüldüğünü/tamamlandığını anlatmak için, genelde kapanış sahnesi.',
+    'abstract-shapes': 'Konuya özel bir sahne uymuyorsa kullanılacak, yumuşak hareket eden nötr şekiller.',
+  };
+
+  function applyScenePlan(plan) {
+    scenes = plan.scenes.map((s) => ({
+      id: nextId++,
+      title: s.title || '',
+      subtitle: s.subtitle || '',
+      duration: Math.min(Math.max(s.duration || DEFAULT_SCENE_DURATION, MIN_SCENE_DURATION), MAX_SCENE_DURATION),
+      composition: s.composition,
+      sceneLeft: SCENE_IDS.includes(s.sceneLeft) ? s.sceneLeft : 'abstract-shapes',
+      sceneRight: SCENE_IDS.includes(s.sceneRight) ? s.sceneRight : 'abstract-shapes',
+    }));
+    renderSceneList();
+    updateActionState();
+    drawAtTime(0);
   }
 
   function setAiStatus(message, kind) {
@@ -702,7 +1038,7 @@
     }
 
     aiGenerateBtn.disabled = true;
-    setAiStatus('Claude\'a soruluyor…');
+    setAiStatus('Claude video planlıyor…');
 
     try {
       const [{ default: Anthropic }, { z }, { zodOutputFormat }] = await Promise.all([
@@ -713,19 +1049,23 @@
 
       const client = new Anthropic({ apiKey: brandRules.apiKey, dangerouslyAllowBrowser: true });
 
-      const ReelSuggestionSchema = z.object({
+      const SceneSchema = z.object({
         title: z.string(),
         subtitle: z.string(),
-        template: z.enum(['kenburns', 'slide', 'snap']),
+        duration: z.number(),
+        composition: z.enum(['split', 'full']),
+        sceneLeft: z.enum(SCENE_IDS),
+        sceneRight: z.enum(SCENE_IDS),
       });
+      const VideoPlanSchema = z.object({ scenes: z.array(SceneSchema).min(1).max(4) });
 
       const response = await client.messages.parse({
         model: 'claude-opus-5',
         max_tokens: 4096,
         system: buildBrandSystemPrompt(brandRules),
         output_config: {
-          format: zodOutputFormat(ReelSuggestionSchema),
-          effort: 'low',
+          format: zodOutputFormat(VideoPlanSchema),
+          effort: 'medium',
         },
         messages: [{ role: 'user', content: promptText }],
       });
@@ -734,8 +1074,8 @@
         throw new Error('Claude yanıtı beklenen formatta ayrıştırılamadı.');
       }
 
-      applySuggestion(response.parsed_output);
-      setAiStatus('Öneri uygulandı — dilersen düzenleyip videoyu oluşturabilirsin.', 'success');
+      applyScenePlan(response.parsed_output);
+      setAiStatus(`Plan hazır — ${response.parsed_output.scenes.length} sahne. Dilersen düzenleyip videoyu oluşturabilirsin.`, 'success');
     } catch (err) {
       console.error(err);
       let message = 'Bilinmeyen bir hata oluştu.';
@@ -759,5 +1099,9 @@
   });
 
   // ---------- Initial paint ----------
+  updateActionState();
   drawAtTime(0);
+
+  // Small debug hook — harmless, useful for troubleshooting from the console.
+  window.__reelsDebug = { applyScenePlan, drawAtTime, getScenes: () => scenes, SCENE_IDS };
 })();

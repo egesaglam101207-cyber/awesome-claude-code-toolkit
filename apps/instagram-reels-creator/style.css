@@ -95,16 +95,16 @@ body {
   color: transparent;
 }
 
-.slide-list {
+.scene-list {
   list-style: none;
-  margin: 14px 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.slide-item {
+.scene-item {
   display: grid;
   grid-template-columns: 52px 1fr auto;
   gap: 10px;
@@ -115,17 +115,21 @@ body {
   padding: 8px;
 }
 
-.slide-thumb {
+.scene-badge {
   width: 52px;
-  height: 92px;
-  object-fit: cover;
-  border-radius: 6px;
-  background: #000;
+  height: 52px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
 }
 
-.slide-fields { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.scene-fields { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 
-.slide-fields input[type="text"] {
+.scene-fields input[type="text"] {
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -135,7 +139,7 @@ body {
   font-size: 0.8rem;
 }
 
-.slide-meta {
+.scene-meta {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -143,7 +147,7 @@ body {
   color: var(--text-dim);
 }
 
-.slide-meta input[type="number"] {
+.scene-meta input[type="number"] {
   width: 48px;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -153,7 +157,7 @@ body {
   font-size: 0.72rem;
 }
 
-.slide-actions {
+.scene-actions {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -172,50 +176,6 @@ body {
 }
 
 .icon-btn:hover { color: var(--text); border-color: var(--accent2); }
-
-.template-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.template-option {
-  background: var(--panel);
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  color: var(--text-dim);
-  padding: 10px 6px;
-  font-size: 0.75rem;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-}
-
-.template-option small { color: var(--text-dim); font-size: 0.65rem; }
-
-.template-option.active {
-  border-color: var(--accent2);
-  color: var(--text);
-  box-shadow: 0 0 0 1px var(--accent2) inset;
-}
-
-.tpl-preview {
-  width: 100%;
-  height: 44px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, var(--accent1), var(--accent2), var(--accent3));
-}
-
-.tpl-kenburns { animation: kenburns-demo 3s ease-in-out infinite alternate; }
-.tpl-slide { background-size: 200% 100%; animation: slide-demo 2s linear infinite; }
-.tpl-snap { opacity: 1; animation: snap-demo 1.2s steps(2) infinite; }
-
-@keyframes kenburns-demo { from { transform: scale(1); } to { transform: scale(1.12); } }
-@keyframes slide-demo { from { background-position: 0% 0; } to { background-position: 100% 0; } }
-@keyframes snap-demo { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.55; } }
 
 .field-row {
   display: flex;

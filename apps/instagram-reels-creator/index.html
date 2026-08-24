@@ -12,7 +12,7 @@
     <span class="brand-dot"></span>
     <h1>Reels Video Oluşturucu</h1>
   </div>
-  <p class="brand-sub">Tamamen tarayıcında çalışır &mdash; dosyaların hiçbir sunucuya gönderilmez.</p>
+  <p class="brand-sub">Tamamen tarayıcında çalışır &mdash; fotoğraf/video yüklenmez, her şey canvas üzerinde çizilir.</p>
 </header>
 
 <main class="layout">
@@ -20,48 +20,26 @@
 
     <div class="card">
       <div class="card-head">
-        <h2>✨ AI ile Otomatik Doldur</h2>
+        <h2>✨ Videonu Anlat</h2>
         <button class="btn-ghost small" id="brandSettingsBtn" type="button">⚙ Marka Kuralları</button>
       </div>
-      <p class="hint">İstediğin videoyu bir cümleyle anlat, Claude marka kurallarına bağlı kalarak başlık/alt yazı/şablon önerisini doldursun.</p>
-      <textarea id="aiPrompt" class="ai-prompt" rows="3" placeholder="Örn: Yaz indirimi için enerjik, kırmızı vurgulu kısa bir reels"></textarea>
-      <button class="btn-primary" id="aiGenerateBtn" type="button">Claude ile Doldur</button>
+      <p class="hint">Ne anlatmak istediğini yaz — Claude, sabit çizim sahnesi kütüphanesinden uygun olanları seçip flat vector illüstrasyon stilinde bir sahne planı oluşturur. Video tamamen bu plandan oluşur, fotoğraf/video yükleme yoktur.</p>
+      <textarea id="aiPrompt" class="ai-prompt" rows="4" placeholder="Örn: Arızalı bir sensörü değiştirdiğimizi anlatan, endişeli sürücü ve elde tutulan parça sahnesi olan kısa bir reels"></textarea>
+      <button class="btn-primary" id="aiGenerateBtn" type="button">Claude ile Video Planla</button>
       <p class="status" id="aiStatus"></p>
     </div>
 
     <div class="card">
-      <h2>1. Fotoğraf / Klip Ekle</h2>
-      <label class="dropzone" id="dropzone" for="fileInput">
-        <span class="dropzone-icon">＋</span>
-        <span>Görsel veya kısa video sürükle, ya da tıkla</span>
-        <input type="file" id="fileInput" accept="image/*,video/*" multiple hidden>
-      </label>
-      <ul class="slide-list" id="slideList"></ul>
-    </div>
-
-    <div class="card">
-      <h2>2. Şablon</h2>
-      <div class="template-grid" id="templateGrid">
-        <button class="template-option active" data-template="kenburns">
-          <span class="tpl-preview tpl-kenburns"></span>
-          Ken Burns
-          <small>Yavaş yakınlaşma + geçiş</small>
-        </button>
-        <button class="template-option" data-template="slide">
-          <span class="tpl-preview tpl-slide"></span>
-          Kaydırma
-          <small>Yandan kayarak geçiş</small>
-        </button>
-        <button class="template-option" data-template="snap">
-          <span class="tpl-preview tpl-snap"></span>
-          Kesme
-          <small>Net, hızlı kesmeler</small>
-        </button>
+      <div class="card-head">
+        <h2>Sahne Planı</h2>
+        <span class="hint" id="durationHint">Toplam süre: 0 sn</span>
       </div>
+      <ul class="scene-list" id="sceneList"></ul>
+      <p class="hint" id="scenesEmptyHint">Henüz bir sahne planı yok — yukarıdan videonu anlat.</p>
     </div>
 
     <div class="card">
-      <h2>3. Arka Plan Müziği</h2>
+      <h2>Arka Plan Müziği</h2>
       <label class="dropzone small" id="musicDropzone" for="musicInput">
         <span class="dropzone-icon">♪</span>
         <span id="musicLabel">Ses dosyası seç (opsiyonel)</span>
@@ -75,15 +53,23 @@
     </div>
 
     <div class="card">
-      <h2>4. Dışa Aktar</h2>
+      <h2>Dışa Aktar</h2>
       <div class="field-row">
         <label for="fpsSelect">Kare hızı</label>
         <select id="fpsSelect">
           <option value="24">24 fps</option>
           <option value="30" selected>30 fps</option>
+          <option value="60">60 fps</option>
         </select>
       </div>
-      <p class="hint" id="durationHint">Toplam süre: 0 sn</p>
+      <div class="field-row">
+        <label for="qualitySelect">Kalite</label>
+        <select id="qualitySelect">
+          <option value="draft">Taslak (küçük dosya)</option>
+          <option value="standard" selected>Standart</option>
+          <option value="high">Yüksek</option>
+        </select>
+      </div>
       <button class="btn-primary" id="exportBtn" type="button" disabled>Reels Videosunu Oluştur</button>
       <div class="progress" id="progressWrap" hidden>
         <div class="progress-bar" id="progressBar"></div>
@@ -98,7 +84,7 @@
       <div class="phone-notch"></div>
       <canvas id="previewCanvas" width="1080" height="1920"></canvas>
       <div class="phone-empty" id="phoneEmpty">
-        <p>Önizlemeyi görmek için soldan bir fotoğraf veya video ekle</p>
+        <p>Önizlemeyi görmek için önce Claude ile bir sahne planı oluştur</p>
       </div>
     </div>
     <div class="preview-controls">
@@ -126,7 +112,7 @@
 
     <label class="brand-field">
       <span>Ton / üslup</span>
-      <input type="text" id="brandToneInput" placeholder="Örn: enerjik ve samimi">
+      <input type="text" id="brandToneInput" placeholder="Örn: güven verici ve net">
     </label>
 
     <label class="brand-field">
@@ -138,17 +124,13 @@
     </label>
 
     <label class="brand-field">
-      <span>Varsayılan şablon</span>
-      <select id="brandTemplateInput">
-        <option value="kenburns" selected>Ken Burns</option>
-        <option value="slide">Kaydırma</option>
-        <option value="snap">Kesme</option>
-      </select>
+      <span>Ana renk (turuncu)</span>
+      <input type="color" id="brandAccentInput" value="#f5821f">
     </label>
 
     <label class="brand-field">
-      <span>Vurgu rengi</span>
-      <input type="color" id="brandAccentInput" value="#fd1d1d">
+      <span>İkincil renk (teal)</span>
+      <input type="color" id="brandSecondaryInput" value="#0f9b8e">
     </label>
 
     <label class="brand-field">
