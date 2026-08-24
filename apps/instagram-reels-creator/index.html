@@ -26,6 +26,10 @@
       <p class="hint">Ne anlatmak istediğini yaz — Claude, sabit çizim sahnesi kütüphanesinden uygun olanları seçip flat vector illüstrasyon stilinde bir sahne planı oluşturur. Video tamamen bu plandan oluşur, fotoğraf/video yükleme yoktur.</p>
       <textarea id="aiPrompt" class="ai-prompt" rows="4" placeholder="Örn: Arızalı bir sensörü değiştirdiğimizi anlatan, endişeli sürücü ve elde tutulan parça sahnesi olan kısa bir reels"></textarea>
       <button class="btn-primary" id="aiGenerateBtn" type="button">Claude ile Video Planla</button>
+      <div class="ai-secondary-actions">
+        <button class="btn-ghost small" id="regenerateBtn" type="button" disabled>🔁 Farklı Bir Versiyon Dene</button>
+        <button class="btn-ghost small" id="demoBtn" type="button">🎬 Örnek Planı Gör (API anahtarı gerekmez)</button>
+      </div>
       <p class="status" id="aiStatus"></p>
     </div>
 

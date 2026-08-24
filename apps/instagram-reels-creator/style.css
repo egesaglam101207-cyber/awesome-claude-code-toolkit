@@ -262,6 +262,15 @@ body {
 
 .card-head h2 { margin: 0; }
 
+.ai-secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ai-secondary-actions .btn-ghost { flex: 1; min-width: 140px; }
+
 .ai-prompt {
   width: 100%;
   background: var(--panel);

@@ -19,6 +19,8 @@
     'wrench-tool': { emoji: '🔧', label: 'Anahtar/Tamir' },
     'dashboard-light': { emoji: '📟', label: 'Gösterge Paneli' },
     'checkmark-fixed': { emoji: '✅', label: 'Onay/Tamamlandı' },
+    'chat-tip': { emoji: '💬', label: 'İpucu/Açıklama' },
+    'growth-chart': { emoji: '📈', label: 'Büyüme/Sonuç' },
     'abstract-shapes': { emoji: '✨', label: 'Soyut Şekiller' },
   };
   const SCENE_IDS = Object.keys(SCENE_LABELS);
@@ -47,6 +49,8 @@
 
   const aiPrompt = document.getElementById('aiPrompt');
   const aiGenerateBtn = document.getElementById('aiGenerateBtn');
+  const regenerateBtn = document.getElementById('regenerateBtn');
+  const demoBtn = document.getElementById('demoBtn');
   const aiStatus = document.getElementById('aiStatus');
   const brandSettingsBtn = document.getElementById('brandSettingsBtn');
   const brandDialog = document.getElementById('brandDialog');
@@ -301,6 +305,8 @@
     'wrench-tool': drawWrenchToolScene,
     'dashboard-light': drawDashboardScene,
     'checkmark-fixed': drawCheckmarkScene,
+    'chat-tip': drawChatTipScene,
+    'growth-chart': drawGrowthChartScene,
     'abstract-shapes': drawAbstractScene,
   };
 
@@ -655,6 +661,135 @@
     c.restore();
   }
 
+  function drawChatTipScene(c, region, t, pal) {
+    const { x, y, w, h } = region;
+    const outline = pal.ink;
+    const lw = Math.max(6, w * 0.018);
+    const bob = Math.sin(t * 1.8) * h * 0.01;
+
+    c.save();
+    c.translate(x + w / 2, y + h * 0.55 + bob);
+
+    // avatar
+    const avR = Math.min(w, h) * 0.16;
+    c.save();
+    c.translate(-w * 0.22, h * 0.08);
+    c.beginPath();
+    c.arc(0, 0, avR, 0, Math.PI * 2);
+    strokeFill(c, pal.teal, outline, lw);
+    c.beginPath();
+    c.arc(-avR * 0.32, -avR * 0.05, avR * 0.09, 0, Math.PI * 2);
+    c.arc(avR * 0.32, -avR * 0.05, avR * 0.09, 0, Math.PI * 2);
+    c.fillStyle = outline;
+    c.fill();
+    c.beginPath();
+    c.arc(0, avR * 0.1, avR * 0.35, 0.15 * Math.PI, 0.85 * Math.PI);
+    c.strokeStyle = outline;
+    c.lineWidth = lw * 0.5;
+    c.stroke();
+    c.restore();
+
+    // speech bubble
+    const bw = w * 0.5;
+    const bh = h * 0.24;
+    const bx = w * 0.02;
+    const by = -h * 0.12;
+    roundRectPath(c, bx, by, bw, bh, bh * 0.3);
+    strokeFill(c, pal.paper, outline, lw * 0.9);
+    c.beginPath();
+    c.moveTo(bx + bw * 0.06, by + bh * 0.92);
+    c.lineTo(bx - bw * 0.08, by + bh * 1.25);
+    c.lineTo(bx + bw * 0.22, by + bh * 0.92);
+    c.closePath();
+    strokeFill(c, pal.paper, outline, lw * 0.7);
+
+    // three animated "typing" dots
+    for (let i = 0; i < 3; i += 1) {
+      const dotX = bx + bw * (0.28 + i * 0.22);
+      const dotY = by + bh * 0.5;
+      const phase = Math.sin(t * 5 - i * 0.8);
+      const s = 1 + 0.25 * Math.max(0, phase);
+      c.save();
+      c.translate(dotX, dotY);
+      c.scale(s, s);
+      c.beginPath();
+      c.arc(0, 0, bh * 0.08, 0, Math.PI * 2);
+      c.fillStyle = pal.orange;
+      c.fill();
+      c.restore();
+    }
+
+    c.restore();
+  }
+
+  function drawGrowthChartScene(c, region, t, pal) {
+    const { x, y, w, h } = region;
+    const outline = pal.ink;
+    const lw = Math.max(6, w * 0.018);
+    const eased = easeOutCubic(clamp01(t / 0.7));
+
+    c.save();
+    c.translate(x + w / 2, y + h * 0.62);
+
+    const bars = [0.35, 0.55, 0.8, 1];
+    const colors = [pal.teal, pal.orange, pal.teal, pal.orange];
+    const barW = w * 0.13;
+    const gap = w * 0.05;
+    const maxH = h * 0.34;
+    const totalW = bars.length * barW + (bars.length - 1) * gap;
+    const startX = -totalW / 2;
+
+    bars.forEach((frac, i) => {
+      const barH = maxH * frac * eased;
+      const bx = startX + i * (barW + gap);
+      roundRectPath(c, bx, -barH, barW, barH, barW * 0.18);
+      strokeFill(c, colors[i], outline, lw * 0.8);
+    });
+
+    c.beginPath();
+    c.moveTo(startX - w * 0.02, 0);
+    c.lineTo(startX + totalW + w * 0.02, 0);
+    c.strokeStyle = outline;
+    c.lineWidth = lw * 0.5;
+    c.stroke();
+
+    if (eased > 0.4) {
+      c.save();
+      c.globalAlpha = clamp01((eased - 0.4) / 0.6);
+      const startPx = startX + barW / 2;
+      const startPy = -maxH * bars[0] * eased - h * 0.03;
+      const endPx = startX + totalW - barW / 2;
+      const endPy = -maxH * bars[bars.length - 1] * eased - h * 0.05;
+      const midX = (startPx + endPx) / 2;
+      const midY = Math.min(startPy, endPy) - h * 0.05;
+
+      c.beginPath();
+      c.moveTo(startPx, startPy);
+      c.quadraticCurveTo(midX, midY, endPx, endPy);
+      c.strokeStyle = pal.orange;
+      c.lineWidth = lw * 0.7;
+      c.lineCap = 'round';
+      c.stroke();
+
+      const ang = Math.atan2(endPy - midY, endPx - midX);
+      c.save();
+      c.translate(endPx, endPy);
+      c.rotate(ang);
+      c.beginPath();
+      c.moveTo(0, 0);
+      c.lineTo(-lw * 1.6, -lw * 0.9);
+      c.moveTo(0, 0);
+      c.lineTo(-lw * 1.6, lw * 0.9);
+      c.strokeStyle = pal.orange;
+      c.lineWidth = lw * 0.7;
+      c.stroke();
+      c.restore();
+      c.restore();
+    }
+
+    c.restore();
+  }
+
   function drawAbstractScene(c, region, t, pal) {
     const { x, y, w, h } = region;
     const outline = pal.ink;
@@ -806,6 +941,38 @@
       drawSceneFrame(next, 0);
       ctx.restore();
     }
+
+    drawProgressBar(idx, localT, scene.duration);
+  }
+
+  function drawProgressBar(activeIdx, localT, activeDuration) {
+    if (scenes.length < 2) return;
+    const pal = palette();
+    ctx.save();
+    ctx.globalAlpha = 1;
+    const pad = 36;
+    const gap = 10;
+    const top = 44;
+    const segH = 7;
+    const totalW = CANVAS_W - pad * 2;
+    const segW = (totalW - gap * (scenes.length - 1)) / scenes.length;
+
+    scenes.forEach((_, i) => {
+      const segX = pad + i * (segW + gap);
+      roundRectPath(ctx, segX, top, segW, segH, segH / 2);
+      ctx.fillStyle = 'rgba(22,22,22,0.18)';
+      ctx.fill();
+
+      let fillFrac = 0;
+      if (i < activeIdx) fillFrac = 1;
+      else if (i === activeIdx) fillFrac = clamp01(localT / activeDuration);
+      if (fillFrac > 0) {
+        roundRectPath(ctx, segX, top, Math.max(segH, segW * fillFrac), segH, segH / 2);
+        ctx.fillStyle = pal.ink;
+        ctx.fill();
+      }
+    });
+    ctx.restore();
   }
 
   // ---------- Preview playback ----------
@@ -973,8 +1140,10 @@
     const lines = [
       'Sen bir Instagram Reels video oluşturucu için sahne planlama asistanısın.',
       'Video tamamen sabit bir flat vector illüstrasyon kütüphanesinden çizilir — fotoğraf/video yoktur.',
-      'Kesinlikle sadece şu 7 sahne kimliğinden birini kullanabilirsin (başka bir şey uydurma):',
+      'Kesinlikle sadece şu sahne kimliklerinden birini kullanabilirsin (başka bir şey uydurma):',
       sceneDocs,
+      '',
+      'İstek otomotiv/araç/tamir ile ilgiliyse [Otomotiv] etiketli sahneleri tercih et. Başka bir konuysa [Genel amaçlı] etiketli sahneleri (chat-tip, growth-chart, checkmark-fixed) kullan; abstract-shapes sadece hiçbiri gerçekten uymuyorsa son çare olmalı.',
       '',
       'Görsel stil (kod tarafında sabit, senin ayarlaman gerekmiyor): flat vector, kalın siyah kontur, teal ve turuncu düz renkler, gölgesiz, sade arka plan.',
       '',
@@ -995,13 +1164,15 @@
   }
 
   const SCENE_DESCRIPTIONS = {
-    'car-driver': 'Direksiyondaki endişeli sürücüyle birlikte hafifçe titreyen bir araba çizimi — araç arızası/sorun anlatımı için.',
-    'hand-sensor': 'Küçük bir motor parçasını/sensörü tutan bir el çizimi — parça inceleme, değiştirme veya elde tutma anlatımı için.',
-    'engine-warning': 'Üzerinde nabız gibi atan bir uyarı üçgeni olan motor bloğu çizimi — arıza/uyarı anlatımı için.',
-    'wrench-tool': 'Dönen bir cıvata/somun ve anahtar çizimi — tamir, bakım, montaj anlatımı için.',
-    'dashboard-light': 'Yanıp sönen bir arıza ikonu olan gösterge paneli çizimi — uyarı ışığı, teşhis anlatımı için.',
-    'checkmark-fixed': 'Büyük, çizilerek beliren bir onay işareti — sorunun çözüldüğünü/tamamlandığını anlatmak için, genelde kapanış sahnesi.',
-    'abstract-shapes': 'Konuya özel bir sahne uymuyorsa kullanılacak, yumuşak hareket eden nötr şekiller.',
+    'car-driver': '[Otomotiv] Direksiyondaki endişeli sürücüyle birlikte hafifçe titreyen bir araba çizimi — araç arızası/sorun anlatımı için.',
+    'hand-sensor': '[Otomotiv] Küçük bir motor parçasını/sensörü tutan bir el çizimi — parça inceleme, değiştirme veya elde tutma anlatımı için.',
+    'engine-warning': '[Otomotiv] Üzerinde nabız gibi atan bir uyarı üçgeni olan motor bloğu çizimi — arıza/uyarı anlatımı için.',
+    'wrench-tool': '[Otomotiv] Dönen bir cıvata/somun ve anahtar çizimi — tamir, bakım, montaj anlatımı için.',
+    'dashboard-light': '[Otomotiv] Yanıp sönen bir arıza ikonu olan gösterge paneli çizimi — uyarı ışığı, teşhis anlatımı için.',
+    'checkmark-fixed': '[Genel amaçlı] Büyük, çizilerek beliren bir onay işareti — sorunun çözüldüğünü/tamamlandığını/başarıyı anlatmak için, genelde kapanış sahnesi.',
+    'chat-tip': '[Genel amaçlı] Konuşma balonu ve basit bir maskot/avatar — ipucu, bilgi, açıklama, duyuru anlatımı için; otomotiv dışı her konuda kullanılabilir.',
+    'growth-chart': '[Genel amaçlı] Yükselen çubuk grafik ve büyüme oku — sonuç, artış, verimlilik, başarı anlatımı için; otomotiv dışı her konuda kullanılabilir.',
+    'abstract-shapes': '[Genel amaçlı, son çare] Hiçbir sahne konuya uymuyorsa kullanılacak, yumuşak hareket eden nötr şekiller.',
   };
 
   function applyScenePlan(plan) {
@@ -1024,8 +1195,24 @@
     aiStatus.className = `status${kind ? ` ${kind}` : ''}`;
   }
 
-  aiGenerateBtn.addEventListener('click', async () => {
-    const promptText = aiPrompt.value.trim();
+  let lastPromptText = '';
+
+  const DEMO_PLAN = {
+    scenes: [
+      { title: 'Arızalı sensör', subtitle: 'Endişeli sürücü fark etti', duration: 3, composition: 'split', sceneLeft: 'car-driver', sceneRight: 'hand-sensor' },
+      { title: 'Teşhis kondu', subtitle: 'Gösterge paneli uyardı', duration: 2.5, composition: 'split', sceneLeft: 'dashboard-light', sceneRight: 'engine-warning' },
+      { title: 'Sonuç: %30 daha verimli', subtitle: 'Doğru parçayla', duration: 3, composition: 'full', sceneLeft: 'growth-chart', sceneRight: 'growth-chart' },
+      { title: 'Tamamlandı', subtitle: 'Sorunsuz yol', duration: 2, composition: 'full', sceneLeft: 'checkmark-fixed', sceneRight: 'checkmark-fixed' },
+    ],
+  };
+
+  demoBtn.addEventListener('click', () => {
+    applyScenePlan(DEMO_PLAN);
+    regenerateBtn.disabled = true;
+    setAiStatus('Örnek plan yüklendi — bu bir demo, AI çağrısı yapılmadı.', 'success');
+  });
+
+  async function runAIPlanning(promptText, { isRegenerate = false } = {}) {
     if (!promptText) {
       setAiStatus('Önce ne tür bir video istediğini yaz.', 'error');
       return;
@@ -1038,7 +1225,8 @@
     }
 
     aiGenerateBtn.disabled = true;
-    setAiStatus('Claude video planlıyor…');
+    regenerateBtn.disabled = true;
+    setAiStatus(isRegenerate ? 'Claude farklı bir versiyon deniyor…' : 'Claude video planlıyor…');
 
     try {
       const [{ default: Anthropic }, { z }, { zodOutputFormat }] = await Promise.all([
@@ -1067,14 +1255,21 @@
           format: zodOutputFormat(VideoPlanSchema),
           effort: 'medium',
         },
-        messages: [{ role: 'user', content: promptText }],
+        messages: [{
+          role: 'user',
+          content: isRegenerate
+            ? `${promptText}\n\n(Not: Bu bir "farklı versiyon dene" isteği — önceki plandan belirgin şekilde farklı bir sahne kombinasyonu ve kompozisyon dene.)`
+            : promptText,
+        }],
       });
 
       if (!response.parsed_output) {
         throw new Error('Claude yanıtı beklenen formatta ayrıştırılamadı.');
       }
 
+      lastPromptText = promptText;
       applyScenePlan(response.parsed_output);
+      regenerateBtn.disabled = false;
       setAiStatus(`Plan hazır — ${response.parsed_output.scenes.length} sahne. Dilersen düzenleyip videoyu oluşturabilirsin.`, 'success');
     } catch (err) {
       console.error(err);
@@ -1095,8 +1290,12 @@
       setAiStatus(message, 'error');
     } finally {
       aiGenerateBtn.disabled = false;
+      regenerateBtn.disabled = !lastPromptText;
     }
-  });
+  }
+
+  aiGenerateBtn.addEventListener('click', () => runAIPlanning(aiPrompt.value.trim()));
+  regenerateBtn.addEventListener('click', () => runAIPlanning(lastPromptText || aiPrompt.value.trim(), { isRegenerate: true }));
 
   // ---------- Initial paint ----------
   updateActionState();
