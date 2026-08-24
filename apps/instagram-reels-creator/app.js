@@ -392,7 +392,97 @@
   }
 
   /** Simple flat bust: headrest + shoulders + head + hair + smiling face. */
-  function drawPersonBust(c, cx, baseY, scale, pal, outline, lw, topColor, bob) {
+  /**
+   * A proper (if simplified) human face: ears, eyebrows, eyes with pupils,
+   * a nose, a filled smiling mouth, cheek blush, and layered hair —
+   * deliberately not a stick-figure dot-eyes-and-arc face.
+   */
+  function drawFace(c, cx, cy, headR, outline, lw, skinTone, hairColor) {
+    // ears (drawn first so hair can cover their top edge)
+    [-1, 1].forEach((side) => {
+      c.beginPath();
+      c.ellipse(cx + side * headR * 0.94, cy + headR * 0.08, headR * 0.14, headR * 0.19, 0, 0, Math.PI * 2);
+      strokeFill(c, skinTone, outline, lw * 0.4);
+    });
+
+    // head (slightly oval reads more human than a perfect circle)
+    c.save();
+    c.translate(cx, cy);
+    c.scale(1, 1.08);
+    c.beginPath();
+    c.arc(0, 0, headR, 0, Math.PI * 2);
+    strokeFill(c, skinTone, outline, lw * 0.7);
+    c.restore();
+
+    // cheek blush
+    c.save();
+    c.globalAlpha = 0.3;
+    [-1, 1].forEach((side) => {
+      c.beginPath();
+      c.ellipse(cx + side * headR * 0.44, cy + headR * 0.3, headR * 0.17, headR * 0.1, 0, 0, Math.PI * 2);
+      c.fillStyle = '#e8798f';
+      c.fill();
+    });
+    c.restore();
+
+    // eyebrows
+    c.strokeStyle = outline;
+    c.lineWidth = lw * 0.35;
+    c.lineCap = 'round';
+    [-1, 1].forEach((side) => {
+      c.beginPath();
+      c.moveTo(cx + side * headR * 0.46, cy - headR * 0.16);
+      c.quadraticCurveTo(cx + side * headR * 0.28, cy - headR * 0.28, cx + side * headR * 0.12, cy - headR * 0.19);
+      c.stroke();
+    });
+
+    // eyes: white sclera + dark pupil (reads far more human than a bare dot)
+    [-1, 1].forEach((side) => {
+      const ex = cx + side * headR * 0.3;
+      const ey = cy - headR * 0.01;
+      c.beginPath();
+      c.ellipse(ex, ey, headR * 0.14, headR * 0.1, 0, 0, Math.PI * 2);
+      strokeFill(c, '#ffffff', outline, lw * 0.28);
+      c.beginPath();
+      c.arc(ex + side * headR * 0.02, ey + headR * 0.015, headR * 0.06, 0, Math.PI * 2);
+      c.fillStyle = outline;
+      c.fill();
+    });
+
+    // simple nose
+    c.beginPath();
+    c.moveTo(cx, cy + headR * 0.04);
+    c.quadraticCurveTo(cx + headR * 0.09, cy + headR * 0.17, cx, cy + headR * 0.22);
+    c.strokeStyle = shade(skinTone, -45);
+    c.lineWidth = lw * 0.28;
+    c.stroke();
+
+    // filled smiling mouth
+    c.beginPath();
+    c.moveTo(cx - headR * 0.24, cy + headR * 0.34);
+    c.quadraticCurveTo(cx, cy + headR * 0.54, cx + headR * 0.24, cy + headR * 0.34);
+    c.quadraticCurveTo(cx, cy + headR * 0.42, cx - headR * 0.24, cy + headR * 0.34);
+    c.closePath();
+    strokeFill(c, '#c65b5b', outline, lw * 0.3);
+
+    // hair: cap over the crown + a couple of texture strands + side part
+    c.beginPath();
+    c.arc(cx, cy - headR * 0.14, headR * 1.06, Math.PI * 1.0, Math.PI * 2.0);
+    c.lineTo(cx + headR, cy + headR * 0.15);
+    c.quadraticCurveTo(cx, cy - headR * 0.3, cx - headR, cy + headR * 0.15);
+    c.closePath();
+    strokeFill(c, hairColor, outline, lw * 0.4);
+    c.strokeStyle = shade(hairColor, hairColor === '#1c1c1c' ? 35 : -35);
+    c.lineWidth = lw * 0.18;
+    [-0.5, -0.1, 0.3].forEach((f) => {
+      c.beginPath();
+      c.moveTo(cx + headR * f, cy - headR * 0.9);
+      c.quadraticCurveTo(cx + headR * f * 1.15, cy - headR * 0.55, cx + headR * f * 1.05, cy - headR * 0.25);
+      c.stroke();
+    });
+  }
+
+  function drawPersonBust(c, cx, baseY, scale, pal, outline, lw, topColor, bob, skinTone, hairColor) {
     const headR = scale * 0.17;
     const shoulderW = scale * 0.52;
     const shoulderH = scale * 0.36;
@@ -410,31 +500,8 @@
     c.closePath();
     strokeFill(c, topColor, outline, lw * 0.8);
 
-    // head
     const headCY = cy - shoulderH * 1.08 - headR * 0.7;
-    c.beginPath();
-    c.arc(cx, headCY, headR, 0, Math.PI * 2);
-    strokeFill(c, pal.pale, outline, lw * 0.7);
-
-    // simple flat hair cap
-    c.beginPath();
-    c.arc(cx, headCY - headR * 0.12, headR * 1.04, Math.PI * 1.02, Math.PI * 1.98);
-    c.lineTo(cx + headR * 0.98, headCY + headR * 0.1);
-    c.quadraticCurveTo(cx, headCY - headR * 0.25, cx - headR * 0.98, headCY + headR * 0.1);
-    c.closePath();
-    strokeFill(c, outline, outline, lw * 0.4);
-
-    // smiling face
-    c.beginPath();
-    c.arc(cx - headR * 0.32, headCY, headR * 0.08, 0, Math.PI * 2);
-    c.arc(cx + headR * 0.32, headCY, headR * 0.08, 0, Math.PI * 2);
-    c.fillStyle = outline;
-    c.fill();
-    c.beginPath();
-    c.arc(cx, headCY + headR * 0.15, headR * 0.35, 0.12 * Math.PI, 0.88 * Math.PI);
-    c.strokeStyle = outline;
-    c.lineWidth = lw * 0.4;
-    c.stroke();
+    drawFace(c, cx, headCY, headR, outline, lw, skinTone, hairColor);
 
     return { headCY, headR, cy, shoulderW, shoulderH };
   }
@@ -499,8 +566,8 @@
     // two people, sitting side by side inside the glass
     const seatY = frameBottom - glassInset - cardH * 0.02;
     const bob = Math.sin(t * 1.4) * cardH * 0.006;
-    drawPersonBust(c, -cardW * 0.16, seatY, cardH * 0.62, pal, outline, lw, pal.accent, bob);
-    const driver = drawPersonBust(c, cardW * 0.17, seatY, cardH * 0.62, pal, outline, lw, pal.soft, -bob);
+    drawPersonBust(c, -cardW * 0.16, seatY, cardH * 0.62, pal, outline, lw, pal.accent, bob, '#e8a26e', '#1c1c1c');
+    const driver = drawPersonBust(c, cardW * 0.17, seatY, cardH * 0.62, pal, outline, lw, pal.soft, -bob, '#c98a5e', '#a8552f');
 
     // steering wheel in front of the driver
     c.save();
@@ -1005,30 +1072,7 @@
     c.lineWidth = lw * 0.3;
     c.stroke();
 
-    c.beginPath();
-    c.arc(0, 0, avR, 0, Math.PI * 2);
-    strokeFill(c, pal.pale, outline, lw);
-    // cheek shade for a touch of dimension (flat block, not a gradient)
-    c.save();
-    c.beginPath();
-    c.arc(0, 0, avR, 0, Math.PI * 2);
-    c.clip();
-    c.globalAlpha = 0.5;
-    c.beginPath();
-    c.arc(avR * 0.5, avR * 0.3, avR * 0.5, 0, Math.PI * 2);
-    c.fillStyle = shade(pal.pale, -35);
-    c.fill();
-    c.restore();
-    c.beginPath();
-    c.arc(-avR * 0.32, -avR * 0.05, avR * 0.09, 0, Math.PI * 2);
-    c.arc(avR * 0.32, -avR * 0.05, avR * 0.09, 0, Math.PI * 2);
-    c.fillStyle = outline;
-    c.fill();
-    c.beginPath();
-    c.arc(0, avR * 0.1, avR * 0.35, 0.15 * Math.PI, 0.85 * Math.PI);
-    c.strokeStyle = outline;
-    c.lineWidth = lw * 0.5;
-    c.stroke();
+    drawFace(c, 0, 0, avR, outline, lw, '#e8a26e', '#3a2a1c');
     c.restore();
 
     // speech bubble
