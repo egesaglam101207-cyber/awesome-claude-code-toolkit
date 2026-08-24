@@ -363,22 +363,44 @@
    * a nose, a composed closed-mouth expression, and layered hair —
    * deliberately not a stick-figure dot-eyes-and-arc face.
    */
+  /** A real head/face silhouette — round crown, wide cheeks, tapered rounded chin. Not a circle. */
+  function headOutlinePath(c, cx, cy, headR) {
+    c.beginPath();
+    c.moveTo(cx, cy - headR * 1.05);
+    c.bezierCurveTo(
+      cx + headR * 0.92, cy - headR * 1.0,
+      cx + headR * 1.02, cy - headR * 0.25,
+      cx + headR * 0.86, cy + headR * 0.35,
+    );
+    c.bezierCurveTo(
+      cx + headR * 0.72, cy + headR * 0.92,
+      cx + headR * 0.34, cy + headR * 1.16,
+      cx, cy + headR * 1.2,
+    );
+    c.bezierCurveTo(
+      cx - headR * 0.34, cy + headR * 1.16,
+      cx - headR * 0.72, cy + headR * 0.92,
+      cx - headR * 0.86, cy + headR * 0.35,
+    );
+    c.bezierCurveTo(
+      cx - headR * 1.02, cy - headR * 0.25,
+      cx - headR * 0.92, cy - headR * 1.0,
+      cx, cy - headR * 1.05,
+    );
+    c.closePath();
+  }
+
   function drawFace(c, cx, cy, headR, outline, lw, skinTone, hairColor, hairStyle) {
-    // ears (drawn first so hair can cover their top edge)
+    // ears (drawn first so hair/jaw can overlap them naturally)
     [-1, 1].forEach((side) => {
       c.beginPath();
-      c.ellipse(cx + side * headR * 0.94, cy + headR * 0.08, headR * 0.14, headR * 0.19, 0, 0, Math.PI * 2);
+      c.ellipse(cx + side * headR * 0.88, cy + headR * 0.05, headR * 0.13, headR * 0.19, 0, 0, Math.PI * 2);
       strokeFill(c, skinTone, outline, lw * 0.4);
     });
 
-    // head (slightly oval reads more human than a perfect circle)
-    c.save();
-    c.translate(cx, cy);
-    c.scale(1, 1.08);
-    c.beginPath();
-    c.arc(0, 0, headR, 0, Math.PI * 2);
+    // head: a real face silhouette, not a circle
+    headOutlinePath(c, cx, cy, headR);
     strokeFill(c, skinTone, outline, lw * 0.7);
-    c.restore();
 
     // eyebrows
     c.strokeStyle = outline;
