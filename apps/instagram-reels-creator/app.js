@@ -82,7 +82,7 @@
     brandName: '',
     tone: '',
     language: 'Türkçe',
-    accentColor: '#1f6f8b',
+    accentColor: '#2f8fac',
     secondaryColor: '#f5821f',
     bannedWords: '',
   };
@@ -113,7 +113,7 @@
    * highlights/status dots/people — not for bulk shape fills.
    */
   function palette() {
-    const base = brandRules.accentColor || '#1f6f8b';
+    const base = brandRules.accentColor || '#2f8fac';
     return {
       base,
       deep: shade(base, -75),
@@ -308,13 +308,54 @@
   }
 
   /** Flat (non-gradient) darker/lighter variant of a hex color — for two-tone color blocking. */
+  /**
+   * Flat (non-gradient) darker/lighter variant of a hex color, adjusted in
+   * HSL space so hue and saturation are preserved — a naive per-channel RGB
+   * shift desaturates toward gray/white at the extremes, which reads as
+   * washed-out. `amt` keeps the same rough magnitude as a 0-255 RGB shift
+   * for compatibility with existing call sites (e.g. -75 = notably darker).
+   */
   function shade(hex, amt) {
     const num = parseInt(hex.replace('#', ''), 16);
-    const clamp = (v) => Math.max(0, Math.min(255, v));
-    const r = clamp((num >> 16) + amt);
-    const g = clamp(((num >> 8) & 0xff) + amt);
-    const b = clamp((num & 0xff) + amt);
-    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+    const r = (num >> 16) / 255;
+    const g = ((num >> 8) & 0xff) / 255;
+    const b = (num & 0xff) / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0;
+    let s = 0;
+    const l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6;
+    }
+    const newL = Math.max(0, Math.min(1, l + amt / 255));
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    let nr;
+    let ng;
+    let nb;
+    if (s === 0) {
+      nr = ng = nb = newL;
+    } else {
+      const q = newL < 0.5 ? newL * (1 + s) : newL + s - newL * s;
+      const p = 2 * newL - q;
+      nr = hue2rgb(p, q, h + 1 / 3);
+      ng = hue2rgb(p, q, h);
+      nb = hue2rgb(p, q, h - 1 / 3);
+    }
+    const toHex = (x) => Math.round(Math.max(0, Math.min(1, x)) * 255).toString(16).padStart(2, '0');
+    return `#${toHex(nr)}${toHex(ng)}${toHex(nb)}`;
   }
 
   /** Soft decorative backdrop (blob + dotted orbit ring + scattered accents) drawn behind a scene. */
@@ -468,11 +509,12 @@
   /** Cluster of overlapping circles around the head crown — reads as curly hair. */
   function drawCurlyHair(c, cx, cy, headR, hairColor, outline, lw) {
     const curls = [
-      { dx: -0.78, dy: -0.5, r: 0.34 }, { dx: -0.4, dy: -0.82, r: 0.37 },
-      { dx: 0.02, dy: -0.92, r: 0.38 }, { dx: 0.44, dy: -0.8, r: 0.36 },
-      { dx: 0.82, dy: -0.46, r: 0.32 }, { dx: -0.98, dy: -0.1, r: 0.28 },
-      { dx: 0.98, dy: -0.08, r: 0.27 }, { dx: -0.88, dy: 0.2, r: 0.22 },
-      { dx: 0.88, dy: 0.22, r: 0.21 },
+      { dx: -0.82, dy: -0.54, r: 0.38 }, { dx: -0.42, dy: -0.88, r: 0.41 },
+      { dx: 0.03, dy: -0.98, r: 0.42 }, { dx: 0.46, dy: -0.86, r: 0.4 },
+      { dx: 0.86, dy: -0.5, r: 0.36 }, { dx: -1.05, dy: -0.12, r: 0.32 },
+      { dx: 1.05, dy: -0.1, r: 0.31 }, { dx: -0.95, dy: 0.22, r: 0.26 },
+      { dx: 0.95, dy: 0.24, r: 0.25 }, { dx: -0.62, dy: -0.94, r: 0.3 },
+      { dx: 0.66, dy: -0.92, r: 0.29 },
     ];
     curls.forEach((k) => {
       c.beginPath();
