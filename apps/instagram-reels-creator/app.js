@@ -13,7 +13,7 @@
   const MAX_SCENE_DURATION = 10;
 
   const SCENE_LABELS = {
-    'car-driver': { emoji: '🚗', label: 'Araba + Sürücü' },
+    'car-driver': { emoji: '🚗', label: 'Araçta İki Kişi' },
     'hand-sensor': { emoji: '🖐️', label: 'El + Parça' },
     'engine-warning': { emoji: '⚠️', label: 'Motor Uyarısı' },
     'wrench-tool': { emoji: '🔧', label: 'Anahtar/Tamir' },
@@ -82,8 +82,8 @@
     brandName: '',
     tone: '',
     language: 'Türkçe',
-    accentColor: '#f5821f',
-    secondaryColor: '#0f9b8e',
+    accentColor: '#1f6f8b',
+    secondaryColor: '#f5821f',
     bannedWords: '',
   };
   let brandRules = loadBrandRules();
@@ -106,11 +106,22 @@
     }
   }
 
+  /**
+   * Single-hue tonal palette (matches the "monochrome environment" technique
+   * in modern flat illustration): every scene shape is a shade of one base
+   * color. `accent` is a small, deliberately different pop-color reserved for
+   * highlights/status dots/people — not for bulk shape fills.
+   */
   function palette() {
+    const base = brandRules.accentColor || '#1f6f8b';
     return {
-      orange: brandRules.accentColor || '#f5821f',
-      teal: brandRules.secondaryColor || '#0f9b8e',
-      ink: '#161616',
+      base,
+      deep: shade(base, -75),
+      mid: shade(base, -25),
+      soft: shade(base, 55),
+      pale: shade(base, 105),
+      accent: brandRules.secondaryColor || '#f5821f',
+      ink: '#141414',
       paper: '#f6f1e4',
     };
   }
@@ -317,7 +328,7 @@
     c.globalAlpha = 0.1;
     c.beginPath();
     c.arc(cx, cy, R, 0, Math.PI * 2);
-    c.fillStyle = seed % 2 === 0 ? pal.teal : pal.orange;
+    c.fillStyle = seed % 2 === 0 ? pal.mid : pal.soft;
     c.fill();
     c.restore();
 
@@ -332,10 +343,10 @@
     c.restore();
 
     const accents = [
-      { dx: -0.6, dy: -0.56, r: 0.045, dot: true, color: pal.orange },
-      { dx: 0.6, dy: -0.5, r: 0.03, dot: false, color: pal.teal },
-      { dx: -0.58, dy: 0.5, r: 0.028, dot: false, color: pal.orange },
-      { dx: 0.6, dy: 0.54, r: 0.05, dot: true, color: pal.teal },
+      { dx: -0.6, dy: -0.56, r: 0.045, dot: true, color: pal.accent },
+      { dx: 0.6, dy: -0.5, r: 0.03, dot: false, color: pal.mid },
+      { dx: -0.58, dy: 0.5, r: 0.028, dot: false, color: pal.soft },
+      { dx: 0.6, dy: 0.54, r: 0.05, dot: true, color: pal.mid },
     ];
     accents.forEach((a) => {
       const ax = cx + a.dx * w;
@@ -371,156 +382,166 @@
     'abstract-shapes': drawAbstractScene,
   };
 
-  function drawCarDriverScene(c, region, t, pal) {
-    const { x, y, w, h } = region;
-    const outline = pal.ink;
-    const lw = Math.max(6, w * 0.018);
-    const jitterX = Math.sin(t * 42) * w * 0.006 + Math.sin(t * 13) * w * 0.003;
-    const jitterY = Math.cos(t * 37) * h * 0.003;
-
-    c.save();
-    c.translate(x + w / 2 + jitterX, y + h * 0.62 + jitterY);
-
-    // ground line
+  function trapezoidPath(c, cx, cy, topY, bottomY, topHalfW, bottomHalfW) {
     c.beginPath();
-    c.moveTo(-w * 0.46, h * 0.24);
-    c.lineTo(w * 0.46, h * 0.24);
-    c.strokeStyle = outline;
-    c.lineWidth = lw * 0.6;
-    c.stroke();
-
-    const bodyW = w * 0.82;
-    const bodyH = h * 0.34;
-
-    // car body (rounded blob via bezier)
-    c.beginPath();
-    c.moveTo(-bodyW / 2, h * 0.08);
-    c.bezierCurveTo(-bodyW / 2, -bodyH * 0.5, -bodyW * 0.32, -bodyH * 0.95, -bodyW * 0.08, -bodyH * 0.95);
-    c.lineTo(bodyW * 0.14, -bodyH * 0.95);
-    c.bezierCurveTo(bodyW * 0.34, -bodyH * 0.95, bodyW * 0.42, -bodyH * 0.55, bodyW / 2, h * 0.02);
-    c.bezierCurveTo(bodyW * 0.5, h * 0.05, bodyW / 2, h * 0.14, bodyW * 0.44, h * 0.14);
-    c.lineTo(-bodyW * 0.44, h * 0.14);
-    c.bezierCurveTo(-bodyW / 2, h * 0.14, -bodyW / 2, h * 0.08, -bodyW / 2, h * 0.08);
+    c.moveTo(cx - topHalfW, cy + topY);
+    c.lineTo(cx + topHalfW, cy + topY);
+    c.lineTo(cx + bottomHalfW, cy + bottomY);
+    c.lineTo(cx - bottomHalfW, cy + bottomY);
     c.closePath();
-    strokeFill(c, pal.teal, outline, lw);
+  }
 
-    // two-tone lower body panel
+  /** Simple flat bust: headrest + shoulders + head + hair + smiling face. */
+  function drawPersonBust(c, cx, baseY, scale, pal, outline, lw, topColor, bob) {
+    const headR = scale * 0.17;
+    const shoulderW = scale * 0.52;
+    const shoulderH = scale * 0.36;
+    const cy = baseY + bob;
+
+    // headrest peeking out behind the shoulders
+    roundRectPath(c, cx - shoulderW * 0.62, cy - shoulderH * 1.5, shoulderW * 1.24, shoulderH, shoulderW * 0.28);
+    strokeFill(c, pal.soft, outline, lw * 0.55);
+
+    // shoulders / torso
     c.beginPath();
-    c.moveTo(-bodyW * 0.46, h * 0.14);
-    c.lineTo(bodyW * 0.44, h * 0.14);
-    c.lineTo(bodyW * 0.44, -h * 0.02);
-    c.lineTo(-bodyW * 0.46, -h * 0.02);
+    c.moveTo(cx - shoulderW / 2, cy);
+    c.quadraticCurveTo(cx - shoulderW / 2, cy - shoulderH, cx, cy - shoulderH * 1.08);
+    c.quadraticCurveTo(cx + shoulderW / 2, cy - shoulderH, cx + shoulderW / 2, cy);
     c.closePath();
-    c.save();
-    c.clip();
+    strokeFill(c, topColor, outline, lw * 0.8);
+
+    // head
+    const headCY = cy - shoulderH * 1.08 - headR * 0.7;
     c.beginPath();
-    c.moveTo(-bodyW / 2, h * 0.08);
-    c.bezierCurveTo(-bodyW / 2, -bodyH * 0.5, -bodyW * 0.32, -bodyH * 0.95, -bodyW * 0.08, -bodyH * 0.95);
-    c.lineTo(bodyW * 0.14, -bodyH * 0.95);
-    c.bezierCurveTo(bodyW * 0.34, -bodyH * 0.95, bodyW * 0.42, -bodyH * 0.55, bodyW / 2, h * 0.02);
-    c.bezierCurveTo(bodyW * 0.5, h * 0.05, bodyW / 2, h * 0.14, bodyW * 0.44, h * 0.14);
-    c.lineTo(-bodyW * 0.44, h * 0.14);
-    c.bezierCurveTo(-bodyW / 2, h * 0.14, -bodyW / 2, h * 0.08, -bodyW / 2, h * 0.08);
+    c.arc(cx, headCY, headR, 0, Math.PI * 2);
+    strokeFill(c, pal.pale, outline, lw * 0.7);
+
+    // simple flat hair cap
+    c.beginPath();
+    c.arc(cx, headCY - headR * 0.12, headR * 1.04, Math.PI * 1.02, Math.PI * 1.98);
+    c.lineTo(cx + headR * 0.98, headCY + headR * 0.1);
+    c.quadraticCurveTo(cx, headCY - headR * 0.25, cx - headR * 0.98, headCY + headR * 0.1);
     c.closePath();
-    c.fillStyle = shade(pal.teal, -35);
-    c.fill();
-    c.restore();
+    strokeFill(c, outline, outline, lw * 0.4);
 
-    // door seam
+    // smiling face
     c.beginPath();
-    c.moveTo(bodyW * 0.02, -bodyH * 0.55);
-    c.lineTo(bodyW * 0.02, h * 0.1);
-    c.strokeStyle = shade(pal.teal, -55);
-    c.lineWidth = lw * 0.35;
-    c.stroke();
-
-    // side mirror
-    roundRectPath(c, -bodyW * 0.16, -bodyH * 0.66, bodyW * 0.07, bodyH * 0.14, bodyW * 0.02);
-    strokeFill(c, pal.teal, outline, lw * 0.55);
-
-    // headlight
-    c.beginPath();
-    c.ellipse(bodyW * 0.45, h * 0.0, bodyW * 0.03, bodyH * 0.08, 0, 0, Math.PI * 2);
-    strokeFill(c, pal.orange, outline, lw * 0.4);
-
-    // window (paper) showing driver
-    const winCX = -bodyW * 0.05;
-    const winCY = -bodyH * 0.55;
-    roundRectPath(c, winCX - bodyW * 0.22, winCY - bodyH * 0.28, bodyW * 0.42, bodyH * 0.5, bodyW * 0.06);
-    strokeFill(c, pal.paper, outline, lw * 0.8);
-
-    // driver head
-    const headR = bodyH * 0.16;
-    c.beginPath();
-    c.arc(winCX, winCY, headR, 0, Math.PI * 2);
-    strokeFill(c, pal.paper, outline, lw * 0.7);
-
-    // worried face: angled brows + dot eyes + curved-down mouth
-    c.beginPath();
-    c.moveTo(winCX - headR * 0.55, winCY - headR * 0.15);
-    c.lineTo(winCX - headR * 0.15, winCY - headR * 0.35);
-    c.moveTo(winCX + headR * 0.15, winCY - headR * 0.35);
-    c.lineTo(winCX + headR * 0.55, winCY - headR * 0.15);
-    c.strokeStyle = outline;
-    c.lineWidth = lw * 0.45;
-    c.stroke();
-
-    c.beginPath();
-    c.arc(winCX - headR * 0.3, winCY, headR * 0.09, 0, Math.PI * 2);
-    c.arc(winCX + headR * 0.3, winCY, headR * 0.09, 0, Math.PI * 2);
+    c.arc(cx - headR * 0.32, headCY, headR * 0.08, 0, Math.PI * 2);
+    c.arc(cx + headR * 0.32, headCY, headR * 0.08, 0, Math.PI * 2);
     c.fillStyle = outline;
     c.fill();
-
     c.beginPath();
-    c.arc(winCX, winCY + headR * 0.55, headR * 0.32, Math.PI * 1.15, Math.PI * 1.85);
+    c.arc(cx, headCY + headR * 0.15, headR * 0.35, 0.12 * Math.PI, 0.88 * Math.PI);
     c.strokeStyle = outline;
     c.lineWidth = lw * 0.4;
     c.stroke();
 
-    // wheels (with hub spokes)
-    [-bodyW * 0.28, bodyW * 0.26].forEach((wx) => {
-      c.beginPath();
-      c.arc(wx, h * 0.14, bodyH * 0.24, 0, Math.PI * 2);
-      strokeFill(c, outline, outline, lw * 0.4);
-      c.beginPath();
-      c.arc(wx, h * 0.14, bodyH * 0.1, 0, Math.PI * 2);
-      strokeFill(c, pal.orange, null, 0);
-      for (let s = 0; s < 3; s += 1) {
-        const ang = (s / 3) * Math.PI * 2 + t * 0.6;
-        c.beginPath();
-        c.moveTo(wx, h * 0.14);
-        c.lineTo(wx + Math.cos(ang) * bodyH * 0.09, h * 0.14 + Math.sin(ang) * bodyH * 0.09);
-        c.strokeStyle = shade(pal.orange, -50);
-        c.lineWidth = lw * 0.25;
-        c.stroke();
-      }
-    });
+    return { headCY, headR, cy, shoulderW, shoulderH };
+  }
 
-    // shake lines near hood, flicker with jitter phase
-    const shakeAlpha = 0.35 + 0.35 * Math.abs(Math.sin(t * 40));
-    c.globalAlpha = shakeAlpha;
-    c.strokeStyle = pal.orange;
-    c.lineWidth = lw * 0.5;
-    [0.18, 0.3].forEach((f, i) => {
+  function drawCarDriverScene(c, region, t, pal) {
+    const { x, y, w, h } = region;
+    const outline = pal.ink;
+    const lw = Math.max(6, w * 0.016);
+
+    c.save();
+    c.translate(x + w / 2, y + h * 0.52);
+
+    const cardW = w * 0.96;
+    const cardH = h * 0.92;
+
+    // environment card — solid tonal "car paint" background, like the reference
+    roundRectPath(c, -cardW / 2, -cardH / 2, cardW, cardH, cardW * 0.07);
+    strokeFill(c, pal.deep, outline, lw);
+
+    c.save();
+    roundRectPath(c, -cardW / 2, -cardH / 2, cardW, cardH, cardW * 0.07);
+    c.clip();
+
+    // windshield frame + glass (trapezoid: narrower roofline, wider at the hood)
+    const frameTop = -cardH * 0.34;
+    const frameBottom = cardH * 0.28;
+    trapezoidPath(c, 0, 0, frameTop, frameBottom, cardW * 0.3, cardW * 0.46);
+    strokeFill(c, pal.soft, outline, lw);
+    const glassInset = cardW * 0.035;
+    trapezoidPath(c, 0, 0, frameTop + glassInset, frameBottom - glassInset, cardW * 0.3 - glassInset, cardW * 0.46 - glassInset);
+    strokeFill(c, pal.pale, outline, lw * 0.5);
+
+    // diagonal glass glare
+    c.save();
+    trapezoidPath(c, 0, 0, frameTop + glassInset, frameBottom - glassInset, cardW * 0.3 - glassInset, cardW * 0.46 - glassInset);
+    c.clip();
+    c.globalAlpha = 0.4;
+    c.beginPath();
+    c.moveTo(-cardW * 0.1, frameTop);
+    c.lineTo(cardW * 0.02, frameTop);
+    c.lineTo(-cardW * 0.28, frameBottom);
+    c.lineTo(-cardW * 0.4, frameBottom);
+    c.closePath();
+    c.fillStyle = '#ffffff';
+    c.fill();
+    c.restore();
+
+    // hood sliver below the windshield
+    roundRectPath(c, -cardW * 0.46, frameBottom - cardH * 0.02, cardW * 0.92, cardH * 0.14, cardW * 0.03);
+    strokeFill(c, pal.mid, outline, lw * 0.7);
+
+    // rearview mirror
+    c.beginPath();
+    c.moveTo(0, frameTop + glassInset);
+    c.lineTo(0, frameTop + cardH * 0.09);
+    c.strokeStyle = outline;
+    c.lineWidth = lw * 0.4;
+    c.stroke();
+    roundRectPath(c, -cardW * 0.06, frameTop + cardH * 0.07, cardW * 0.12, cardH * 0.045, cardH * 0.02);
+    strokeFill(c, pal.mid, outline, lw * 0.4);
+
+    // two people, sitting side by side inside the glass
+    const seatY = frameBottom - glassInset - cardH * 0.02;
+    const bob = Math.sin(t * 1.4) * cardH * 0.006;
+    drawPersonBust(c, -cardW * 0.16, seatY, cardH * 0.62, pal, outline, lw, pal.accent, bob);
+    const driver = drawPersonBust(c, cardW * 0.17, seatY, cardH * 0.62, pal, outline, lw, pal.soft, -bob);
+
+    // steering wheel in front of the driver
+    c.save();
+    const wheelR = driver.shoulderW * 0.42;
+    const wheelCX = cardW * 0.17;
+    const wheelCY = driver.cy - driver.shoulderH * 0.35;
+    const wobble = Math.sin(t * 0.9) * 0.05;
+    c.translate(wheelCX, wheelCY);
+    c.rotate(wobble);
+    c.beginPath();
+    c.arc(0, 0, wheelR, 0, Math.PI * 2);
+    c.strokeStyle = outline;
+    c.lineWidth = lw * 0.55;
+    c.stroke();
+    [0, 2.1, 4.2].forEach((ang) => {
       c.beginPath();
-      c.moveTo(bodyW * 0.5 + w * 0.02, -bodyH * f + (i * 10));
-      c.quadraticCurveTo(bodyW * 0.62, -bodyH * f, bodyW * 0.58 + w * 0.05, -bodyH * f + 14);
+      c.moveTo(0, 0);
+      c.lineTo(Math.cos(ang) * wheelR, Math.sin(ang) * wheelR);
+      c.strokeStyle = outline;
+      c.lineWidth = lw * 0.4;
       c.stroke();
     });
-    c.globalAlpha = 1;
+    c.beginPath();
+    c.arc(0, 0, wheelR * 0.22, 0, Math.PI * 2);
+    strokeFill(c, pal.soft, outline, lw * 0.35);
+    c.restore();
 
-    // exhaust puffs
-    for (let p = 0; p < 2; p += 1) {
-      const phase = (t * 1.4 + p * 0.5) % 1;
+    // side mirrors, peeking past the card edges
+    [-1, 1].forEach((side) => {
       c.save();
-      c.globalAlpha = 0.4 * (1 - phase);
+      c.translate(side * cardW * 0.49, frameTop + cardH * 0.22);
       c.beginPath();
-      c.arc(-bodyW * 0.52 - phase * w * 0.05, h * 0.16, bodyH * (0.05 + phase * 0.07), 0, Math.PI * 2);
-      c.fillStyle = shade(pal.ink, 160);
-      c.fill();
+      c.moveTo(0, -cardH * 0.03);
+      c.quadraticCurveTo(side * cardW * 0.06, 0, 0, cardH * 0.03);
+      c.quadraticCurveTo(side * -cardW * 0.01, 0, 0, -cardH * 0.03);
+      c.closePath();
+      strokeFill(c, pal.soft, outline, lw * 0.5);
       c.restore();
-    }
+    });
 
+    c.restore();
     c.restore();
   }
 
@@ -539,11 +560,11 @@
 
     // wrist cuff (color block, sleeve hint) — sits just below the palm
     roundRectPath(c, -palmW * 0.42, palmH * 0.88, palmW * 0.84, palmH * 0.5, palmH * 0.12);
-    strokeFill(c, pal.orange, outline, lw * 0.8);
+    strokeFill(c, pal.accent, outline, lw * 0.8);
     c.beginPath();
     c.moveTo(-palmW * 0.42, palmH * 1.08);
     c.lineTo(palmW * 0.42, palmH * 1.08);
-    c.strokeStyle = shade(pal.orange, -50);
+    c.strokeStyle = shade(pal.accent, -50);
     c.lineWidth = lw * 0.3;
     c.stroke();
 
@@ -575,13 +596,13 @@
     const sensorBob = Math.sin(t * 2.2) * h * 0.006;
     const sy = -palmH * 1.15 + sensorBob;
     roundRectPath(c, -palmW * 0.16, sy - palmH * 0.22, palmW * 0.32, palmH * 0.4, palmH * 0.12);
-    strokeFill(c, pal.teal, outline, lw * 0.9);
+    strokeFill(c, pal.mid, outline, lw * 0.9);
 
     // two-tone bottom half + corner screws for a "manufactured part" feel
     c.save();
     roundRectPath(c, -palmW * 0.16, sy - palmH * 0.22, palmW * 0.32, palmH * 0.4, palmH * 0.12);
     c.clip();
-    c.fillStyle = shade(pal.teal, -35);
+    c.fillStyle = shade(pal.mid, -35);
     c.fillRect(-palmW * 0.16, sy + palmH * 0.02, palmW * 0.32, palmH * 0.2);
     c.restore();
     [[-palmW * 0.12, sy - palmH * 0.16], [palmW * 0.1, sy - palmH * 0.16]].forEach(([sx, syy]) => {
@@ -592,7 +613,7 @@
     });
 
     roundRectPath(c, -palmW * 0.08, sy - palmH * 0.36, palmW * 0.16, palmH * 0.16, palmH * 0.05);
-    strokeFill(c, pal.orange, outline, lw * 0.6);
+    strokeFill(c, pal.accent, outline, lw * 0.6);
 
     [-palmW * 0.09, palmW * 0.01].forEach((px) => {
       c.beginPath();
@@ -605,14 +626,14 @@
     c.globalAlpha = blink;
     c.beginPath();
     c.arc(0, sy - palmH * 0.02, palmH * 0.06, 0, Math.PI * 2);
-    c.fillStyle = pal.orange;
+    c.fillStyle = pal.accent;
     c.fill();
     c.globalAlpha = 1;
 
     // soft inspection dashes radiating from sensor
     const pulse = clamp01(Math.sin(t * 2) * 0.5 + 0.5);
     c.globalAlpha = 0.25 + 0.35 * pulse;
-    c.strokeStyle = pal.orange;
+    c.strokeStyle = pal.accent;
     c.lineWidth = lw * 0.4;
     for (let a = 0; a < 6; a += 1) {
       const ang = (a / 6) * Math.PI * 2;
@@ -640,15 +661,15 @@
     const blockW = w * 0.66;
     const blockH = h * 0.34;
     roundRectPath(c, -blockW / 2, -blockH * 0.1, blockW, blockH, blockW * 0.08);
-    strokeFill(c, pal.teal, outline, lw);
+    strokeFill(c, pal.mid, outline, lw);
 
     // two-tone side shadow block + vent ridges for texture
     c.save();
     roundRectPath(c, -blockW / 2, -blockH * 0.1, blockW, blockH, blockW * 0.08);
     c.clip();
-    c.fillStyle = shade(pal.teal, -35);
+    c.fillStyle = shade(pal.mid, -35);
     c.fillRect(blockW * 0.22, -blockH * 0.1, blockW * 0.28, blockH);
-    c.strokeStyle = shade(pal.teal, -55);
+    c.strokeStyle = shade(pal.mid, -55);
     c.lineWidth = lw * 0.25;
     for (let v = 0; v < 3; v += 1) {
       c.beginPath();
@@ -659,7 +680,7 @@
     c.restore();
 
     roundRectPath(c, -blockW * 0.32, -blockH * 0.5, blockW * 0.64, blockH * 0.45, blockW * 0.06);
-    strokeFill(c, pal.teal, outline, lw * 0.8);
+    strokeFill(c, pal.mid, outline, lw * 0.8);
 
     // hose curving to a small reservoir
     c.beginPath();
@@ -669,14 +690,14 @@
     c.lineWidth = lw * 0.45;
     c.stroke();
     roundRectPath(c, blockW * 0.46, blockH * 0.02, blockW * 0.2, blockH * 0.22, blockW * 0.05);
-    strokeFill(c, pal.orange, outline, lw * 0.5);
+    strokeFill(c, pal.soft, outline, lw * 0.5);
 
     // bolts with cross-hatch (read as screws)
     [[-blockW * 0.3, blockH * 0.1], [blockW * 0.3, blockH * 0.1], [-blockW * 0.3, blockH * 0.65], [blockW * 0.3, blockH * 0.65]]
       .forEach(([bx, by]) => {
         c.beginPath();
         c.arc(bx, by, blockW * 0.035, 0, Math.PI * 2);
-        strokeFill(c, pal.orange, outline, lw * 0.4);
+        strokeFill(c, pal.soft, outline, lw * 0.4);
         c.beginPath();
         c.moveTo(bx - blockW * 0.02, by);
         c.lineTo(bx + blockW * 0.02, by);
@@ -697,7 +718,7 @@
     c.lineTo(triR * 0.9, triR * 0.7);
     c.lineTo(-triR * 0.9, triR * 0.7);
     c.closePath();
-    strokeFill(c, pal.orange, outline, lw);
+    strokeFill(c, pal.accent, outline, lw);
 
     c.beginPath();
     c.rect(-lw * 0.4, -triR * 0.35, lw * 0.8, triR * 0.55);
@@ -727,7 +748,7 @@
     const sdLen = w * 0.4;
     roundRectPath(c, -sdLen / 2, -h * 0.014, sdLen * 0.7, h * 0.028, h * 0.012);
     c.globalAlpha = 0.85;
-    strokeFill(c, shade(pal.orange, 30), outline, lw * 0.5);
+    strokeFill(c, shade(pal.soft, 30), outline, lw * 0.5);
     roundRectPath(c, sdLen * 0.2, -h * 0.022, sdLen * 0.3, h * 0.044, h * 0.01);
     strokeFill(c, pal.ink, outline, lw * 0.5);
     c.globalAlpha = 1;
@@ -746,7 +767,7 @@
       if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
     }
     c.closePath();
-    strokeFill(c, pal.orange, outline, lw * 0.8);
+    strokeFill(c, pal.soft, outline, lw * 0.8);
     c.beginPath();
     for (let i = 0; i < 6; i += 1) {
       const ang = (i / 6) * Math.PI * 2;
@@ -755,7 +776,7 @@
       if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
     }
     c.closePath();
-    c.strokeStyle = shade(pal.orange, -50);
+    c.strokeStyle = shade(pal.soft, -50);
     c.lineWidth = lw * 0.25;
     c.stroke();
     c.beginPath();
@@ -782,11 +803,11 @@
     const shaftLen = w * 0.5;
     const shaftW = h * 0.045;
     roundRectPath(c, -shaftLen / 2, -shaftW / 2, shaftLen, shaftW, shaftW / 2);
-    strokeFill(c, pal.teal, outline, lw * 0.8);
+    strokeFill(c, pal.mid, outline, lw * 0.8);
     c.beginPath();
     c.moveTo(-shaftLen * 0.3, 0);
     c.lineTo(shaftLen * 0.3, 0);
-    c.strokeStyle = shade(pal.teal, -45);
+    c.strokeStyle = shade(pal.mid, -45);
     c.lineWidth = shaftW * 0.18;
     c.stroke();
 
@@ -796,7 +817,7 @@
       c.beginPath();
       c.arc(0, 0, shaftW * 1.6, Math.PI * 0.15, Math.PI * 1.85);
       c.lineWidth = shaftW * 0.9;
-      c.strokeStyle = pal.teal;
+      c.strokeStyle = pal.mid;
       c.lineCap = 'round';
       c.stroke();
       c.strokeStyle = outline;
@@ -840,13 +861,13 @@
     c.restore();
 
     roundRectPath(c, -panelW / 2, -panelH / 2, panelW, panelH, panelW * 0.08);
-    strokeFill(c, pal.teal, outline, lw);
+    strokeFill(c, pal.mid, outline, lw);
 
     // darker header strip (two-tone)
     c.save();
     roundRectPath(c, -panelW / 2, -panelH / 2, panelW, panelH, panelW * 0.08);
     c.clip();
-    c.fillStyle = shade(pal.teal, -35);
+    c.fillStyle = shade(pal.mid, -35);
     c.fillRect(-panelW / 2, -panelH / 2, panelW, panelH * 0.26);
     c.restore();
 
@@ -865,7 +886,7 @@
         c.beginPath();
         c.moveTo(gx + Math.cos(ang) * r1, panelH * 0.05 + Math.sin(ang) * r1);
         c.lineTo(gx + Math.cos(ang) * r2, panelH * 0.05 + Math.sin(ang) * r2);
-        c.strokeStyle = shade(pal.teal, -55);
+        c.strokeStyle = shade(pal.mid, -55);
         c.lineWidth = lw * 0.22;
         c.stroke();
       }
@@ -873,7 +894,7 @@
       c.beginPath();
       c.moveTo(gx, panelH * 0.05);
       c.lineTo(gx + Math.cos(needleAngle) * gr * 0.8, panelH * 0.05 + Math.sin(needleAngle) * gr * 0.8);
-      c.strokeStyle = pal.orange;
+      c.strokeStyle = pal.accent;
       c.lineWidth = lw * 0.5;
       c.stroke();
       c.beginPath();
@@ -889,7 +910,7 @@
     c.translate(0, -panelH * 0.28);
     c.beginPath();
     c.arc(0, 0, panelW * 0.07, 0, Math.PI * 2);
-    strokeFill(c, pal.orange, outline, lw * 0.5);
+    strokeFill(c, pal.accent, outline, lw * 0.5);
     c.beginPath();
     roundRectPath(c, -panelW * 0.03, -panelW * 0.02, panelW * 0.06, panelW * 0.045, panelW * 0.01);
     strokeFill(c, outline, null, 0);
@@ -917,7 +938,7 @@
     if (burstAlpha > 0) {
       c.save();
       c.globalAlpha = burstAlpha * 0.7;
-      c.strokeStyle = pal.orange;
+      c.strokeStyle = pal.accent;
       c.lineWidth = lw * 0.35;
       for (let i = 0; i < 8; i += 1) {
         const ang = (i / 8) * Math.PI * 2 + t * 0.4;
@@ -933,12 +954,12 @@
 
     c.beginPath();
     c.arc(0, 0, r, 0, Math.PI * 2);
-    strokeFill(c, pal.teal, outline, lw);
+    strokeFill(c, pal.mid, outline, lw);
 
     // inner darker ring for depth (flat, no gradient)
     c.beginPath();
     c.arc(0, 0, r * 0.86, 0, Math.PI * 2);
-    c.strokeStyle = shade(pal.teal, -35);
+    c.strokeStyle = shade(pal.mid, -35);
     c.lineWidth = lw * 0.3;
     c.stroke();
 
@@ -947,7 +968,7 @@
     c.moveTo(-r * 0.45, r * 0.05);
     c.lineTo(-r * 0.12, r * 0.35);
     c.lineTo(r * 0.5, -r * 0.32);
-    c.strokeStyle = pal.orange;
+    c.strokeStyle = pal.accent;
     c.lineWidth = lw * 0.9;
     c.lineCap = 'round';
     c.lineJoin = 'round';
@@ -976,17 +997,17 @@
     // shoulders/body so it reads as a person, not a floating head
     c.beginPath();
     c.arc(0, avR * 1.55, avR * 1.15, Math.PI, Math.PI * 2);
-    strokeFill(c, pal.orange, outline, lw * 0.85);
+    strokeFill(c, pal.accent, outline, lw * 0.85);
     c.beginPath();
     c.moveTo(-avR * 0.55, avR * 1.55);
     c.lineTo(avR * 0.55, avR * 1.55);
-    c.strokeStyle = shade(pal.orange, -45);
+    c.strokeStyle = shade(pal.accent, -45);
     c.lineWidth = lw * 0.3;
     c.stroke();
 
     c.beginPath();
     c.arc(0, 0, avR, 0, Math.PI * 2);
-    strokeFill(c, pal.teal, outline, lw);
+    strokeFill(c, pal.pale, outline, lw);
     // cheek shade for a touch of dimension (flat block, not a gradient)
     c.save();
     c.beginPath();
@@ -995,7 +1016,7 @@
     c.globalAlpha = 0.5;
     c.beginPath();
     c.arc(avR * 0.5, avR * 0.3, avR * 0.5, 0, Math.PI * 2);
-    c.fillStyle = shade(pal.teal, -35);
+    c.fillStyle = shade(pal.pale, -35);
     c.fill();
     c.restore();
     c.beginPath();
@@ -1037,7 +1058,7 @@
     c.lineTo(0, spR); c.lineTo(-spR * 0.22, spR * 0.22);
     c.lineTo(-spR, 0); c.lineTo(-spR * 0.22, -spR * 0.22);
     c.closePath();
-    c.fillStyle = pal.orange;
+    c.fillStyle = pal.accent;
     c.fill();
     c.restore();
 
@@ -1052,7 +1073,7 @@
       c.scale(s, s);
       c.beginPath();
       c.arc(0, 0, bh * 0.08, 0, Math.PI * 2);
-      c.fillStyle = pal.orange;
+      c.fillStyle = pal.accent;
       c.fill();
       c.restore();
     }
@@ -1070,7 +1091,7 @@
     c.translate(x + w / 2, y + h * 0.62);
 
     const bars = [0.35, 0.55, 0.8, 1];
-    const colors = [pal.teal, pal.orange, pal.teal, pal.orange];
+    const colors = [pal.mid, pal.soft, pal.mid, pal.soft];
     const barW = w * 0.13;
     const gap = w * 0.05;
     const maxH = h * 0.34;
@@ -1127,7 +1148,7 @@
       c.beginPath();
       c.moveTo(startPx, startPy);
       c.quadraticCurveTo(midX, midY, endPx, endPy);
-      c.strokeStyle = pal.orange;
+      c.strokeStyle = pal.accent;
       c.lineWidth = lw * 0.7;
       c.lineCap = 'round';
       c.stroke();
@@ -1141,7 +1162,7 @@
       c.lineTo(-lw * 1.6, -lw * 0.9);
       c.moveTo(0, 0);
       c.lineTo(-lw * 1.6, lw * 0.9);
-      c.strokeStyle = pal.orange;
+      c.strokeStyle = pal.accent;
       c.lineWidth = lw * 0.7;
       c.stroke();
       c.restore();
@@ -1174,8 +1195,8 @@
     const cy = y + h * 0.55;
 
     const blobs = [
-      { r: w * 0.22, dx: -0.18, dy: -0.05, color: pal.teal, speed: 0.7 },
-      { r: w * 0.16, dx: 0.16, dy: 0.08, color: pal.orange, speed: 0.9 },
+      { r: w * 0.22, dx: -0.18, dy: -0.05, color: pal.mid, speed: 0.7 },
+      { r: w * 0.16, dx: 0.16, dy: 0.08, color: pal.soft, speed: 0.9 },
       { r: w * 0.11, dx: 0.02, dy: -0.22, color: pal.paper, speed: 1.1 },
     ];
     const positions = blobs.map((b) => ({
@@ -1229,7 +1250,7 @@
     });
 
     // small floating accent dots
-    [[0.32, -0.32, pal.orange], [-0.34, 0.3, pal.teal]].forEach(([dx, dy, color], i) => {
+    [[0.32, -0.32, pal.accent], [-0.34, 0.3, pal.mid]].forEach(([dx, dy, color], i) => {
       const ax = cx + dx * w + Math.sin(t * 1.3 + i) * w * 0.015;
       const ay = cy + dy * h + Math.cos(t * 1.1 + i) * h * 0.012;
       c.beginPath();
@@ -1279,7 +1300,7 @@
     ctx.globalAlpha = alpha;
 
     if (lines.length) {
-      ctx.fillStyle = pal.orange;
+      ctx.fillStyle = pal.accent;
       const tagWidth = 60;
       ctx.fillRect(CANVAS_W / 2 - tagWidth / 2, y - 26, tagWidth, 7);
     }
@@ -1594,7 +1615,7 @@
   }
 
   const SCENE_DESCRIPTIONS = {
-    'car-driver': '[Otomotiv] Direksiyondaki endişeli sürücüyle birlikte hafifçe titreyen bir araba çizimi — araç arızası/sorun anlatımı için.',
+    'car-driver': '[Otomotiv] Ön camdan görünen, içinde gülümseyen sürücü ve yolcunun olduğu bir araç çizimi — sürüş, yolculuk, test sürüşü, araçtaki insanlar anlatımı için.',
     'hand-sensor': '[Otomotiv] Küçük bir motor parçasını/sensörü tutan bir el çizimi — parça inceleme, değiştirme veya elde tutma anlatımı için.',
     'engine-warning': '[Otomotiv] Üzerinde nabız gibi atan bir uyarı üçgeni olan motor bloğu çizimi — arıza/uyarı anlatımı için.',
     'wrench-tool': '[Otomotiv] Dönen bir cıvata/somun ve anahtar çizimi — tamir, bakım, montaj anlatımı için.',
@@ -1629,7 +1650,7 @@
 
   const DEMO_PLAN = {
     scenes: [
-      { title: 'Arızalı sensör', subtitle: 'Endişeli sürücü fark etti', duration: 3, composition: 'split', sceneLeft: 'car-driver', sceneRight: 'hand-sensor' },
+      { title: 'Yolculuğa hazır', subtitle: 'Doğru parçayla güvenli sürüş', duration: 3, composition: 'split', sceneLeft: 'car-driver', sceneRight: 'hand-sensor' },
       { title: 'Teşhis kondu', subtitle: 'Gösterge paneli uyardı', duration: 2.5, composition: 'split', sceneLeft: 'dashboard-light', sceneRight: 'engine-warning' },
       { title: 'Sonuç: %30 daha verimli', subtitle: 'Doğru parçayla', duration: 3, composition: 'full', sceneLeft: 'growth-chart', sceneRight: 'growth-chart' },
       { title: 'Tamamlandı', subtitle: 'Sorunsuz yol', duration: 2, composition: 'full', sceneLeft: 'checkmark-fixed', sceneRight: 'checkmark-fixed' },
