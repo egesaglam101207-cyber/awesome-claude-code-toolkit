@@ -296,6 +296,67 @@
     if (strokeColor) { c.strokeStyle = strokeColor; c.lineWidth = lineWidth; c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke(); }
   }
 
+  /** Flat (non-gradient) darker/lighter variant of a hex color — for two-tone color blocking. */
+  function shade(hex, amt) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const clamp = (v) => Math.max(0, Math.min(255, v));
+    const r = clamp((num >> 16) + amt);
+    const g = clamp(((num >> 8) & 0xff) + amt);
+    const b = clamp((num & 0xff) + amt);
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+  }
+
+  /** Soft decorative backdrop (blob + dotted orbit ring + scattered accents) drawn behind a scene. */
+  function drawSceneBackdrop(c, region, pal, seed) {
+    const { x, y, w, h } = region;
+    const cx = x + w / 2;
+    const cy = y + h * 0.52;
+    const R = Math.min(w, h) * 0.7;
+
+    c.save();
+    c.globalAlpha = 0.1;
+    c.beginPath();
+    c.arc(cx, cy, R, 0, Math.PI * 2);
+    c.fillStyle = seed % 2 === 0 ? pal.teal : pal.orange;
+    c.fill();
+    c.restore();
+
+    c.save();
+    c.globalAlpha = 0.3;
+    c.setLineDash([2, 16]);
+    c.lineWidth = Math.max(3, w * 0.006);
+    c.strokeStyle = pal.ink;
+    c.beginPath();
+    c.arc(cx, cy, R * 0.88, 0, Math.PI * 2);
+    c.stroke();
+    c.restore();
+
+    const accents = [
+      { dx: -0.6, dy: -0.56, r: 0.045, dot: true, color: pal.orange },
+      { dx: 0.6, dy: -0.5, r: 0.03, dot: false, color: pal.teal },
+      { dx: -0.58, dy: 0.5, r: 0.028, dot: false, color: pal.orange },
+      { dx: 0.6, dy: 0.54, r: 0.05, dot: true, color: pal.teal },
+    ];
+    accents.forEach((a) => {
+      const ax = cx + a.dx * w;
+      const ay = cy + a.dy * h;
+      const r = a.r * Math.min(w, h);
+      c.save();
+      c.globalAlpha = 0.55;
+      c.beginPath();
+      c.arc(ax, ay, r, 0, Math.PI * 2);
+      if (a.dot) {
+        c.fillStyle = a.color;
+        c.fill();
+      } else {
+        c.strokeStyle = a.color;
+        c.lineWidth = Math.max(3, w * 0.009);
+        c.stroke();
+      }
+      c.restore();
+    });
+  }
+
   // ---------- Scene library (flat vector illustrations) ----------
 
   const SCENE_LIBRARY = {
@@ -343,6 +404,45 @@
     c.closePath();
     strokeFill(c, pal.teal, outline, lw);
 
+    // two-tone lower body panel
+    c.beginPath();
+    c.moveTo(-bodyW * 0.46, h * 0.14);
+    c.lineTo(bodyW * 0.44, h * 0.14);
+    c.lineTo(bodyW * 0.44, -h * 0.02);
+    c.lineTo(-bodyW * 0.46, -h * 0.02);
+    c.closePath();
+    c.save();
+    c.clip();
+    c.beginPath();
+    c.moveTo(-bodyW / 2, h * 0.08);
+    c.bezierCurveTo(-bodyW / 2, -bodyH * 0.5, -bodyW * 0.32, -bodyH * 0.95, -bodyW * 0.08, -bodyH * 0.95);
+    c.lineTo(bodyW * 0.14, -bodyH * 0.95);
+    c.bezierCurveTo(bodyW * 0.34, -bodyH * 0.95, bodyW * 0.42, -bodyH * 0.55, bodyW / 2, h * 0.02);
+    c.bezierCurveTo(bodyW * 0.5, h * 0.05, bodyW / 2, h * 0.14, bodyW * 0.44, h * 0.14);
+    c.lineTo(-bodyW * 0.44, h * 0.14);
+    c.bezierCurveTo(-bodyW / 2, h * 0.14, -bodyW / 2, h * 0.08, -bodyW / 2, h * 0.08);
+    c.closePath();
+    c.fillStyle = shade(pal.teal, -35);
+    c.fill();
+    c.restore();
+
+    // door seam
+    c.beginPath();
+    c.moveTo(bodyW * 0.02, -bodyH * 0.55);
+    c.lineTo(bodyW * 0.02, h * 0.1);
+    c.strokeStyle = shade(pal.teal, -55);
+    c.lineWidth = lw * 0.35;
+    c.stroke();
+
+    // side mirror
+    roundRectPath(c, -bodyW * 0.16, -bodyH * 0.66, bodyW * 0.07, bodyH * 0.14, bodyW * 0.02);
+    strokeFill(c, pal.teal, outline, lw * 0.55);
+
+    // headlight
+    c.beginPath();
+    c.ellipse(bodyW * 0.45, h * 0.0, bodyW * 0.03, bodyH * 0.08, 0, 0, Math.PI * 2);
+    strokeFill(c, pal.orange, outline, lw * 0.4);
+
     // window (paper) showing driver
     const winCX = -bodyW * 0.05;
     const winCY = -bodyH * 0.55;
@@ -377,7 +477,7 @@
     c.lineWidth = lw * 0.4;
     c.stroke();
 
-    // wheels
+    // wheels (with hub spokes)
     [-bodyW * 0.28, bodyW * 0.26].forEach((wx) => {
       c.beginPath();
       c.arc(wx, h * 0.14, bodyH * 0.24, 0, Math.PI * 2);
@@ -385,6 +485,15 @@
       c.beginPath();
       c.arc(wx, h * 0.14, bodyH * 0.1, 0, Math.PI * 2);
       strokeFill(c, pal.orange, null, 0);
+      for (let s = 0; s < 3; s += 1) {
+        const ang = (s / 3) * Math.PI * 2 + t * 0.6;
+        c.beginPath();
+        c.moveTo(wx, h * 0.14);
+        c.lineTo(wx + Math.cos(ang) * bodyH * 0.09, h * 0.14 + Math.sin(ang) * bodyH * 0.09);
+        c.strokeStyle = shade(pal.orange, -50);
+        c.lineWidth = lw * 0.25;
+        c.stroke();
+      }
     });
 
     // shake lines near hood, flicker with jitter phase
@@ -399,6 +508,18 @@
       c.stroke();
     });
     c.globalAlpha = 1;
+
+    // exhaust puffs
+    for (let p = 0; p < 2; p += 1) {
+      const phase = (t * 1.4 + p * 0.5) % 1;
+      c.save();
+      c.globalAlpha = 0.4 * (1 - phase);
+      c.beginPath();
+      c.arc(-bodyW * 0.52 - phase * w * 0.05, h * 0.16, bodyH * (0.05 + phase * 0.07), 0, Math.PI * 2);
+      c.fillStyle = shade(pal.ink, 160);
+      c.fill();
+      c.restore();
+    }
 
     c.restore();
   }
@@ -415,14 +536,31 @@
     // hand (palm + thumb + four rounded finger bumps)
     const palmW = w * 0.62;
     const palmH = h * 0.26;
+
+    // wrist cuff (color block, sleeve hint) — sits just below the palm
+    roundRectPath(c, -palmW * 0.42, palmH * 0.88, palmW * 0.84, palmH * 0.5, palmH * 0.12);
+    strokeFill(c, pal.orange, outline, lw * 0.8);
+    c.beginPath();
+    c.moveTo(-palmW * 0.42, palmH * 1.08);
+    c.lineTo(palmW * 0.42, palmH * 1.08);
+    c.strokeStyle = shade(pal.orange, -50);
+    c.lineWidth = lw * 0.3;
+    c.stroke();
+
     roundRectPath(c, -palmW / 2, 0, palmW, palmH, palmH * 0.35);
     strokeFill(c, pal.paper, outline, lw);
 
-    // fingers
+    // fingers (+ crease lines for definition)
     for (let i = 0; i < 4; i += 1) {
       const fx = -palmW * 0.34 + i * (palmW * 0.23);
       roundRectPath(c, fx, -palmH * 0.55, palmW * 0.17, palmH * 0.65, palmW * 0.08);
       strokeFill(c, pal.paper, outline, lw * 0.8);
+      c.beginPath();
+      c.moveTo(fx + palmW * 0.02, palmH * 0.02);
+      c.lineTo(fx + palmW * 0.15, palmH * 0.02);
+      c.strokeStyle = shade('#f6f1e4', -25);
+      c.lineWidth = lw * 0.25;
+      c.stroke();
     }
 
     // thumb
@@ -438,6 +576,20 @@
     const sy = -palmH * 1.15 + sensorBob;
     roundRectPath(c, -palmW * 0.16, sy - palmH * 0.22, palmW * 0.32, palmH * 0.4, palmH * 0.12);
     strokeFill(c, pal.teal, outline, lw * 0.9);
+
+    // two-tone bottom half + corner screws for a "manufactured part" feel
+    c.save();
+    roundRectPath(c, -palmW * 0.16, sy - palmH * 0.22, palmW * 0.32, palmH * 0.4, palmH * 0.12);
+    c.clip();
+    c.fillStyle = shade(pal.teal, -35);
+    c.fillRect(-palmW * 0.16, sy + palmH * 0.02, palmW * 0.32, palmH * 0.2);
+    c.restore();
+    [[-palmW * 0.12, sy - palmH * 0.16], [palmW * 0.1, sy - palmH * 0.16]].forEach(([sx, syy]) => {
+      c.beginPath();
+      c.arc(sx, syy, palmH * 0.025, 0, Math.PI * 2);
+      c.fillStyle = outline;
+      c.fill();
+    });
 
     roundRectPath(c, -palmW * 0.08, sy - palmH * 0.36, palmW * 0.16, palmH * 0.16, palmH * 0.05);
     strokeFill(c, pal.orange, outline, lw * 0.6);
@@ -490,15 +642,49 @@
     roundRectPath(c, -blockW / 2, -blockH * 0.1, blockW, blockH, blockW * 0.08);
     strokeFill(c, pal.teal, outline, lw);
 
+    // two-tone side shadow block + vent ridges for texture
+    c.save();
+    roundRectPath(c, -blockW / 2, -blockH * 0.1, blockW, blockH, blockW * 0.08);
+    c.clip();
+    c.fillStyle = shade(pal.teal, -35);
+    c.fillRect(blockW * 0.22, -blockH * 0.1, blockW * 0.28, blockH);
+    c.strokeStyle = shade(pal.teal, -55);
+    c.lineWidth = lw * 0.25;
+    for (let v = 0; v < 3; v += 1) {
+      c.beginPath();
+      c.moveTo(-blockW * 0.15 + v * blockW * 0.1, -blockH * 0.05);
+      c.lineTo(-blockW * 0.15 + v * blockW * 0.1, blockH * 0.55);
+      c.stroke();
+    }
+    c.restore();
+
     roundRectPath(c, -blockW * 0.32, -blockH * 0.5, blockW * 0.64, blockH * 0.45, blockW * 0.06);
     strokeFill(c, pal.teal, outline, lw * 0.8);
 
-    // bolts
+    // hose curving to a small reservoir
+    c.beginPath();
+    c.moveTo(blockW * 0.3, -blockH * 0.3);
+    c.quadraticCurveTo(blockW * 0.55, -blockH * 0.25, blockW * 0.56, blockH * 0.05);
+    c.strokeStyle = outline;
+    c.lineWidth = lw * 0.45;
+    c.stroke();
+    roundRectPath(c, blockW * 0.46, blockH * 0.02, blockW * 0.2, blockH * 0.22, blockW * 0.05);
+    strokeFill(c, pal.orange, outline, lw * 0.5);
+
+    // bolts with cross-hatch (read as screws)
     [[-blockW * 0.3, blockH * 0.1], [blockW * 0.3, blockH * 0.1], [-blockW * 0.3, blockH * 0.65], [blockW * 0.3, blockH * 0.65]]
       .forEach(([bx, by]) => {
         c.beginPath();
         c.arc(bx, by, blockW * 0.035, 0, Math.PI * 2);
         strokeFill(c, pal.orange, outline, lw * 0.4);
+        c.beginPath();
+        c.moveTo(bx - blockW * 0.02, by);
+        c.lineTo(bx + blockW * 0.02, by);
+        c.moveTo(bx, by - blockW * 0.02);
+        c.lineTo(bx, by + blockW * 0.02);
+        c.strokeStyle = outline;
+        c.lineWidth = lw * 0.22;
+        c.stroke();
       });
 
     // warning triangle above, pulsing
@@ -535,6 +721,18 @@
     c.save();
     c.translate(x + w / 2, y + h * 0.58);
 
+    // small screwdriver crossing behind, for a "toolkit" feel
+    c.save();
+    c.rotate(0.9);
+    const sdLen = w * 0.4;
+    roundRectPath(c, -sdLen / 2, -h * 0.014, sdLen * 0.7, h * 0.028, h * 0.012);
+    c.globalAlpha = 0.85;
+    strokeFill(c, shade(pal.orange, 30), outline, lw * 0.5);
+    roundRectPath(c, sdLen * 0.2, -h * 0.022, sdLen * 0.3, h * 0.044, h * 0.01);
+    strokeFill(c, pal.ink, outline, lw * 0.5);
+    c.globalAlpha = 1;
+    c.restore();
+
     // bolt/nut (hexagon)
     c.save();
     c.translate(w * 0.14, h * 0.1);
@@ -550,8 +748,32 @@
     c.closePath();
     strokeFill(c, pal.orange, outline, lw * 0.8);
     c.beginPath();
+    for (let i = 0; i < 6; i += 1) {
+      const ang = (i / 6) * Math.PI * 2;
+      const px = Math.cos(ang) * hexR * 0.62;
+      const py = Math.sin(ang) * hexR * 0.62;
+      if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+    }
+    c.closePath();
+    c.strokeStyle = shade(pal.orange, -50);
+    c.lineWidth = lw * 0.25;
+    c.stroke();
+    c.beginPath();
     c.arc(0, 0, hexR * 0.4, 0, Math.PI * 2);
     strokeFill(c, pal.paper, outline, lw * 0.5);
+    // sparkle accents near the bolt
+    [[hexR * 1.3, -hexR * 0.8], [-hexR * 1.4, hexR * 0.6]].forEach(([sx, sy]) => {
+      c.save();
+      c.translate(sx, sy);
+      c.globalAlpha = 0.5 + 0.4 * Math.max(0, Math.sin(t * 5 + sx));
+      c.beginPath();
+      c.moveTo(-hexR * 0.12, 0); c.lineTo(hexR * 0.12, 0);
+      c.moveTo(0, -hexR * 0.12); c.lineTo(0, hexR * 0.12);
+      c.strokeStyle = pal.ink;
+      c.lineWidth = lw * 0.25;
+      c.stroke();
+      c.restore();
+    });
     c.restore();
 
     // wrench
@@ -561,6 +783,12 @@
     const shaftW = h * 0.045;
     roundRectPath(c, -shaftLen / 2, -shaftW / 2, shaftLen, shaftW, shaftW / 2);
     strokeFill(c, pal.teal, outline, lw * 0.8);
+    c.beginPath();
+    c.moveTo(-shaftLen * 0.3, 0);
+    c.lineTo(shaftLen * 0.3, 0);
+    c.strokeStyle = shade(pal.teal, -45);
+    c.lineWidth = shaftW * 0.18;
+    c.stroke();
 
     [-1, 1].forEach((side) => {
       c.save();
@@ -591,10 +819,38 @@
 
     const panelW = w * 0.78;
     const panelH = h * 0.32;
+
+    // steering wheel hint behind the panel — a full ring so the panel
+    // naturally occludes the top portion; only the rim peeks out below.
+    const wheelCY = panelH * 0.7;
+    const wheelR = panelH * 0.85;
+    c.save();
+    c.globalAlpha = 0.5;
+    c.beginPath();
+    c.arc(0, wheelCY, wheelR, 0, Math.PI * 2);
+    c.strokeStyle = pal.ink;
+    c.lineWidth = lw * 0.6;
+    c.stroke();
+    [0.35, Math.PI - 0.35, Math.PI / 2].forEach((ang) => {
+      c.beginPath();
+      c.moveTo(0, wheelCY);
+      c.lineTo(Math.cos(ang) * wheelR, wheelCY + Math.sin(ang) * wheelR);
+      c.stroke();
+    });
+    c.restore();
+
     roundRectPath(c, -panelW / 2, -panelH / 2, panelW, panelH, panelW * 0.08);
     strokeFill(c, pal.teal, outline, lw);
 
-    // two gauges
+    // darker header strip (two-tone)
+    c.save();
+    roundRectPath(c, -panelW / 2, -panelH / 2, panelW, panelH, panelW * 0.08);
+    c.clip();
+    c.fillStyle = shade(pal.teal, -35);
+    c.fillRect(-panelW / 2, -panelH / 2, panelW, panelH * 0.26);
+    c.restore();
+
+    // two gauges (with tick marks)
     [-panelW * 0.24, panelW * 0.24].forEach((gx) => {
       const gr = panelW * 0.16;
       c.beginPath();
@@ -602,6 +858,17 @@
       c.strokeStyle = pal.paper;
       c.lineWidth = gr * 0.35;
       c.stroke();
+      for (let tk = 0; tk <= 4; tk += 1) {
+        const ang = Math.PI + (tk / 4) * Math.PI;
+        const r1 = gr * 1.22;
+        const r2 = gr * 1.34;
+        c.beginPath();
+        c.moveTo(gx + Math.cos(ang) * r1, panelH * 0.05 + Math.sin(ang) * r1);
+        c.lineTo(gx + Math.cos(ang) * r2, panelH * 0.05 + Math.sin(ang) * r2);
+        c.strokeStyle = shade(pal.teal, -55);
+        c.lineWidth = lw * 0.22;
+        c.stroke();
+      }
       const needleAngle = Math.PI + Math.PI * (0.3 + 0.15 * Math.sin(t * 2 + gx));
       c.beginPath();
       c.moveTo(gx, panelH * 0.05);
@@ -609,6 +876,10 @@
       c.strokeStyle = pal.orange;
       c.lineWidth = lw * 0.5;
       c.stroke();
+      c.beginPath();
+      c.arc(gx, panelH * 0.05, gr * 0.08, 0, Math.PI * 2);
+      c.fillStyle = outline;
+      c.fill();
     });
 
     // blinking check-engine icon, centered
@@ -640,9 +911,36 @@
     c.scale(scale, scale);
 
     const r = Math.min(w, h) * 0.24;
+
+    // celebratory burst rays, fading in after the checkmark draws
+    const burstAlpha = clamp01((eased - 0.5) / 0.5);
+    if (burstAlpha > 0) {
+      c.save();
+      c.globalAlpha = burstAlpha * 0.7;
+      c.strokeStyle = pal.orange;
+      c.lineWidth = lw * 0.35;
+      for (let i = 0; i < 8; i += 1) {
+        const ang = (i / 8) * Math.PI * 2 + t * 0.4;
+        const r1 = r * 1.25;
+        const r2 = r * (1.42 + 0.05 * Math.sin(t * 3 + i));
+        c.beginPath();
+        c.moveTo(Math.cos(ang) * r1, Math.sin(ang) * r1);
+        c.lineTo(Math.cos(ang) * r2, Math.sin(ang) * r2);
+        c.stroke();
+      }
+      c.restore();
+    }
+
     c.beginPath();
     c.arc(0, 0, r, 0, Math.PI * 2);
     strokeFill(c, pal.teal, outline, lw);
+
+    // inner darker ring for depth (flat, no gradient)
+    c.beginPath();
+    c.arc(0, 0, r * 0.86, 0, Math.PI * 2);
+    c.strokeStyle = shade(pal.teal, -35);
+    c.lineWidth = lw * 0.3;
+    c.stroke();
 
     const checkLen = r * 2.6;
     c.beginPath();
@@ -674,9 +972,32 @@
     const avR = Math.min(w, h) * 0.16;
     c.save();
     c.translate(-w * 0.22, h * 0.08);
+
+    // shoulders/body so it reads as a person, not a floating head
+    c.beginPath();
+    c.arc(0, avR * 1.55, avR * 1.15, Math.PI, Math.PI * 2);
+    strokeFill(c, pal.orange, outline, lw * 0.85);
+    c.beginPath();
+    c.moveTo(-avR * 0.55, avR * 1.55);
+    c.lineTo(avR * 0.55, avR * 1.55);
+    c.strokeStyle = shade(pal.orange, -45);
+    c.lineWidth = lw * 0.3;
+    c.stroke();
+
     c.beginPath();
     c.arc(0, 0, avR, 0, Math.PI * 2);
     strokeFill(c, pal.teal, outline, lw);
+    // cheek shade for a touch of dimension (flat block, not a gradient)
+    c.save();
+    c.beginPath();
+    c.arc(0, 0, avR, 0, Math.PI * 2);
+    c.clip();
+    c.globalAlpha = 0.5;
+    c.beginPath();
+    c.arc(avR * 0.5, avR * 0.3, avR * 0.5, 0, Math.PI * 2);
+    c.fillStyle = shade(pal.teal, -35);
+    c.fill();
+    c.restore();
     c.beginPath();
     c.arc(-avR * 0.32, -avR * 0.05, avR * 0.09, 0, Math.PI * 2);
     c.arc(avR * 0.32, -avR * 0.05, avR * 0.09, 0, Math.PI * 2);
@@ -702,6 +1023,23 @@
     c.lineTo(bx + bw * 0.22, by + bh * 0.92);
     c.closePath();
     strokeFill(c, pal.paper, outline, lw * 0.7);
+
+    // idea sparkle accent above the bubble
+    c.save();
+    c.translate(bx + bw * 0.86, by - bh * 0.18);
+    const sparklePulse = 0.6 + 0.4 * Math.max(0, Math.sin(t * 3));
+    c.globalAlpha = sparklePulse;
+    c.rotate(t * 0.5);
+    const spR = bh * 0.14;
+    c.beginPath();
+    c.moveTo(0, -spR); c.lineTo(spR * 0.22, -spR * 0.22);
+    c.lineTo(spR, 0); c.lineTo(spR * 0.22, spR * 0.22);
+    c.lineTo(0, spR); c.lineTo(-spR * 0.22, spR * 0.22);
+    c.lineTo(-spR, 0); c.lineTo(-spR * 0.22, -spR * 0.22);
+    c.closePath();
+    c.fillStyle = pal.orange;
+    c.fill();
+    c.restore();
 
     // three animated "typing" dots
     for (let i = 0; i < 3; i += 1) {
@@ -739,11 +1077,34 @@
     const totalW = bars.length * barW + (bars.length - 1) * gap;
     const startX = -totalW / 2;
 
+    // subtle horizontal gridlines behind the bars
+    c.save();
+    c.globalAlpha = 0.18;
+    c.setLineDash([2, 12]);
+    c.strokeStyle = pal.ink;
+    c.lineWidth = lw * 0.3;
+    for (let gRow = 1; gRow <= 3; gRow += 1) {
+      c.beginPath();
+      c.moveTo(startX - w * 0.02, -maxH * (gRow / 3));
+      c.lineTo(startX + totalW + w * 0.02, -maxH * (gRow / 3));
+      c.stroke();
+    }
+    c.restore();
+
     bars.forEach((frac, i) => {
       const barH = maxH * frac * eased;
       const bx = startX + i * (barW + gap);
       roundRectPath(c, bx, -barH, barW, barH, barW * 0.18);
       strokeFill(c, colors[i], outline, lw * 0.8);
+      // lighter cap band (two-tone) on top of each bar
+      if (barH > barW * 0.3) {
+        c.save();
+        roundRectPath(c, bx, -barH, barW, barH, barW * 0.18);
+        c.clip();
+        c.fillStyle = shade(colors[i], 40);
+        c.fillRect(bx, -barH, barW, barW * 0.22);
+        c.restore();
+      }
     });
 
     c.beginPath();
@@ -784,6 +1145,21 @@
       c.lineWidth = lw * 0.7;
       c.stroke();
       c.restore();
+
+      // small badge pill at the arrow tip with an up-triangle icon
+      c.save();
+      c.translate(endPx, endPy - h * 0.05);
+      roundRectPath(c, -barW * 0.32, -barW * 0.22, barW * 0.64, barW * 0.44, barW * 0.22);
+      strokeFill(c, pal.ink, null, 0);
+      c.beginPath();
+      c.moveTo(0, -barW * 0.1);
+      c.lineTo(barW * 0.08, barW * 0.06);
+      c.lineTo(-barW * 0.08, barW * 0.06);
+      c.closePath();
+      c.fillStyle = pal.paper;
+      c.fill();
+      c.restore();
+
       c.restore();
     }
 
@@ -802,12 +1178,63 @@
       { r: w * 0.16, dx: 0.16, dy: 0.08, color: pal.orange, speed: 0.9 },
       { r: w * 0.11, dx: 0.02, dy: -0.22, color: pal.paper, speed: 1.1 },
     ];
-    blobs.forEach((b) => {
-      const bx = cx + b.dx * w + Math.sin(t * b.speed) * w * 0.02;
-      const by = cy + b.dy * h + Math.cos(t * b.speed * 0.8) * h * 0.015;
+    const positions = blobs.map((b) => ({
+      x: cx + b.dx * w + Math.sin(t * b.speed) * w * 0.02,
+      y: cy + b.dy * h + Math.cos(t * b.speed * 0.8) * h * 0.015,
+    }));
+
+    // thin connecting lines between blobs, like a constellation
+    c.save();
+    c.globalAlpha = 0.3;
+    c.strokeStyle = outline;
+    c.lineWidth = lw * 0.3;
+    c.setLineDash([3, 10]);
+    for (let i = 0; i < positions.length; i += 1) {
+      const next = positions[(i + 1) % positions.length];
+      c.beginPath();
+      c.moveTo(positions[i].x, positions[i].y);
+      c.lineTo(next.x, next.y);
+      c.stroke();
+    }
+    c.restore();
+
+    blobs.forEach((b, i) => {
+      const { x: bx, y: by } = positions[i];
+      // dotted orbit ring around the largest blob for extra texture
+      if (i === 0) {
+        c.save();
+        c.globalAlpha = 0.4;
+        c.setLineDash([2, 14]);
+        c.strokeStyle = outline;
+        c.lineWidth = lw * 0.3;
+        c.beginPath();
+        c.arc(bx, by, b.r * 1.35, 0, Math.PI * 2);
+        c.stroke();
+        c.restore();
+      }
       c.beginPath();
       c.arc(bx, by, b.r, 0, Math.PI * 2);
       strokeFill(c, b.color, outline, lw);
+      // two-tone crescent for depth
+      c.save();
+      c.beginPath();
+      c.arc(bx, by, b.r, 0, Math.PI * 2);
+      c.clip();
+      c.globalAlpha = 0.35;
+      c.beginPath();
+      c.arc(bx + b.r * 0.4, by + b.r * 0.35, b.r * 0.75, 0, Math.PI * 2);
+      c.fillStyle = b.color === pal.paper ? shade(pal.ink, 200) : shade(b.color, -35);
+      c.fill();
+      c.restore();
+    });
+
+    // small floating accent dots
+    [[0.32, -0.32, pal.orange], [-0.34, 0.3, pal.teal]].forEach(([dx, dy, color], i) => {
+      const ax = cx + dx * w + Math.sin(t * 1.3 + i) * w * 0.015;
+      const ay = cy + dy * h + Math.cos(t * 1.1 + i) * h * 0.012;
+      c.beginPath();
+      c.arc(ax, ay, w * 0.02, 0, Math.PI * 2);
+      strokeFill(c, color, outline, lw * 0.4);
     });
   }
 
@@ -899,10 +1326,13 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
+      drawSceneBackdrop(ctx, region, pal, 0);
+      drawSceneBackdrop(ctx, regionR, pal, 1);
       (SCENE_LIBRARY[scene.sceneLeft] || drawAbstractScene)(ctx, region, localT, pal, scene.duration);
       (SCENE_LIBRARY[scene.sceneRight] || drawAbstractScene)(ctx, regionR, localT, pal, scene.duration);
     } else {
       const region = { x: PAD, y: CANVAS_H * 0.2, w: CANVAS_W - PAD * 2, h: CANVAS_H * 0.5 };
+      drawSceneBackdrop(ctx, region, pal, 0);
       (SCENE_LIBRARY[scene.sceneLeft] || drawAbstractScene)(ctx, region, localT, pal, scene.duration);
     }
 
