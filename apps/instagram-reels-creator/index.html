@@ -24,7 +24,7 @@
         <button class="btn-ghost small" id="brandSettingsBtn" type="button">⚙ Marka Kuralları</button>
       </div>
       <p class="hint">Ne anlatmak istediğini yaz — Claude, sabit çizim sahnesi kütüphanesinden uygun olanları seçip flat vector illüstrasyon stilinde bir sahne planı oluşturur. Video tamamen bu plandan oluşur, fotoğraf/video yükleme yoktur.</p>
-      <textarea id="aiPrompt" class="ai-prompt" rows="4" placeholder="Örn: Arızalı bir sensörü değiştirdiğimizi anlatan, endişeli sürücü ve elde tutulan parça sahnesi olan kısa bir reels"></textarea>
+      <textarea id="aiPrompt" class="ai-prompt" rows="4" placeholder="Örn: Arızalı bir sensörü değiştirdiğimizi anlatan, araçta iki kişi ve elde tutulan parça sahnesi olan kısa bir reels"></textarea>
       <button class="btn-primary" id="aiGenerateBtn" type="button">Claude ile Video Planla</button>
       <div class="ai-secondary-actions">
         <button class="btn-ghost small" id="regenerateBtn" type="button" disabled>🔁 Farklı Bir Versiyon Dene</button>
@@ -128,13 +128,13 @@
     </label>
 
     <label class="brand-field">
-      <span>Ana renk (turuncu)</span>
-      <input type="color" id="brandAccentInput" value="#f5821f">
+      <span>Ana renk (tüm çizimler bu rengin tonlarıyla yapılır)</span>
+      <input type="color" id="brandAccentInput" value="#1f6f8b">
     </label>
 
     <label class="brand-field">
-      <span>İkincil renk (teal)</span>
-      <input type="color" id="brandSecondaryInput" value="#0f9b8e">
+      <span>Vurgu rengi (yalnızca küçük parlama/durum detayları)</span>
+      <input type="color" id="brandSecondaryInput" value="#f5821f">
     </label>
 
     <label class="brand-field">
