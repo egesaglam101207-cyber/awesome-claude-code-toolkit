@@ -318,54 +318,20 @@
   }
 
   /** Soft decorative backdrop (blob + dotted orbit ring + scattered accents) drawn behind a scene. */
+  /** A single restrained tonal backdrop shape — no dotted rings or scattered accents. */
   function drawSceneBackdrop(c, region, pal, seed) {
     const { x, y, w, h } = region;
     const cx = x + w / 2;
     const cy = y + h * 0.52;
-    const R = Math.min(w, h) * 0.7;
+    const R = Math.min(w, h) * 0.66;
 
     c.save();
-    c.globalAlpha = 0.1;
+    c.globalAlpha = 0.08;
     c.beginPath();
     c.arc(cx, cy, R, 0, Math.PI * 2);
     c.fillStyle = seed % 2 === 0 ? pal.mid : pal.soft;
     c.fill();
     c.restore();
-
-    c.save();
-    c.globalAlpha = 0.3;
-    c.setLineDash([2, 16]);
-    c.lineWidth = Math.max(3, w * 0.006);
-    c.strokeStyle = pal.ink;
-    c.beginPath();
-    c.arc(cx, cy, R * 0.88, 0, Math.PI * 2);
-    c.stroke();
-    c.restore();
-
-    const accents = [
-      { dx: -0.6, dy: -0.56, r: 0.045, dot: true, color: pal.accent },
-      { dx: 0.6, dy: -0.5, r: 0.03, dot: false, color: pal.mid },
-      { dx: -0.58, dy: 0.5, r: 0.028, dot: false, color: pal.soft },
-      { dx: 0.6, dy: 0.54, r: 0.05, dot: true, color: pal.mid },
-    ];
-    accents.forEach((a) => {
-      const ax = cx + a.dx * w;
-      const ay = cy + a.dy * h;
-      const r = a.r * Math.min(w, h);
-      c.save();
-      c.globalAlpha = 0.55;
-      c.beginPath();
-      c.arc(ax, ay, r, 0, Math.PI * 2);
-      if (a.dot) {
-        c.fillStyle = a.color;
-        c.fill();
-      } else {
-        c.strokeStyle = a.color;
-        c.lineWidth = Math.max(3, w * 0.009);
-        c.stroke();
-      }
-      c.restore();
-    });
   }
 
   // ---------- Scene library (flat vector illustrations) ----------
@@ -394,7 +360,7 @@
   /** Simple flat bust: headrest + shoulders + head + hair + smiling face. */
   /**
    * A proper (if simplified) human face: ears, eyebrows, eyes with pupils,
-   * a nose, a filled smiling mouth, cheek blush, and layered hair —
+   * a nose, a composed closed-mouth expression, and layered hair —
    * deliberately not a stick-figure dot-eyes-and-arc face.
    */
   function drawFace(c, cx, cy, headR, outline, lw, skinTone, hairColor) {
@@ -412,17 +378,6 @@
     c.beginPath();
     c.arc(0, 0, headR, 0, Math.PI * 2);
     strokeFill(c, skinTone, outline, lw * 0.7);
-    c.restore();
-
-    // cheek blush
-    c.save();
-    c.globalAlpha = 0.3;
-    [-1, 1].forEach((side) => {
-      c.beginPath();
-      c.ellipse(cx + side * headR * 0.44, cy + headR * 0.3, headR * 0.17, headR * 0.1, 0, 0, Math.PI * 2);
-      c.fillStyle = '#e8798f';
-      c.fill();
-    });
     c.restore();
 
     // eyebrows
@@ -457,13 +412,14 @@
     c.lineWidth = lw * 0.28;
     c.stroke();
 
-    // filled smiling mouth
+    // composed, closed-mouth expression — confident rather than a cartoon grin
     c.beginPath();
-    c.moveTo(cx - headR * 0.24, cy + headR * 0.34);
-    c.quadraticCurveTo(cx, cy + headR * 0.54, cx + headR * 0.24, cy + headR * 0.34);
-    c.quadraticCurveTo(cx, cy + headR * 0.42, cx - headR * 0.24, cy + headR * 0.34);
-    c.closePath();
-    strokeFill(c, '#c65b5b', outline, lw * 0.3);
+    c.moveTo(cx - headR * 0.2, cy + headR * 0.36);
+    c.quadraticCurveTo(cx, cy + headR * 0.44, cx + headR * 0.2, cy + headR * 0.36);
+    c.strokeStyle = outline;
+    c.lineWidth = lw * 0.32;
+    c.lineCap = 'round';
+    c.stroke();
 
     // hair: cap over the crown + a couple of texture strands + side part
     c.beginPath();
@@ -849,19 +805,6 @@
     c.beginPath();
     c.arc(0, 0, hexR * 0.4, 0, Math.PI * 2);
     strokeFill(c, pal.paper, outline, lw * 0.5);
-    // sparkle accents near the bolt
-    [[hexR * 1.3, -hexR * 0.8], [-hexR * 1.4, hexR * 0.6]].forEach(([sx, sy]) => {
-      c.save();
-      c.translate(sx, sy);
-      c.globalAlpha = 0.5 + 0.4 * Math.max(0, Math.sin(t * 5 + sx));
-      c.beginPath();
-      c.moveTo(-hexR * 0.12, 0); c.lineTo(hexR * 0.12, 0);
-      c.moveTo(0, -hexR * 0.12); c.lineTo(0, hexR * 0.12);
-      c.strokeStyle = pal.ink;
-      c.lineWidth = lw * 0.25;
-      c.stroke();
-      c.restore();
-    });
     c.restore();
 
     // wrench
@@ -1000,25 +943,6 @@
 
     const r = Math.min(w, h) * 0.24;
 
-    // celebratory burst rays, fading in after the checkmark draws
-    const burstAlpha = clamp01((eased - 0.5) / 0.5);
-    if (burstAlpha > 0) {
-      c.save();
-      c.globalAlpha = burstAlpha * 0.7;
-      c.strokeStyle = pal.accent;
-      c.lineWidth = lw * 0.35;
-      for (let i = 0; i < 8; i += 1) {
-        const ang = (i / 8) * Math.PI * 2 + t * 0.4;
-        const r1 = r * 1.25;
-        const r2 = r * (1.42 + 0.05 * Math.sin(t * 3 + i));
-        c.beginPath();
-        c.moveTo(Math.cos(ang) * r1, Math.sin(ang) * r1);
-        c.lineTo(Math.cos(ang) * r2, Math.sin(ang) * r2);
-        c.stroke();
-      }
-      c.restore();
-    }
-
     c.beginPath();
     c.arc(0, 0, r, 0, Math.PI * 2);
     strokeFill(c, pal.mid, outline, lw);
@@ -1089,29 +1013,11 @@
     c.closePath();
     strokeFill(c, pal.paper, outline, lw * 0.7);
 
-    // idea sparkle accent above the bubble
-    c.save();
-    c.translate(bx + bw * 0.86, by - bh * 0.18);
-    const sparklePulse = 0.6 + 0.4 * Math.max(0, Math.sin(t * 3));
-    c.globalAlpha = sparklePulse;
-    c.rotate(t * 0.5);
-    const spR = bh * 0.14;
-    c.beginPath();
-    c.moveTo(0, -spR); c.lineTo(spR * 0.22, -spR * 0.22);
-    c.lineTo(spR, 0); c.lineTo(spR * 0.22, spR * 0.22);
-    c.lineTo(0, spR); c.lineTo(-spR * 0.22, spR * 0.22);
-    c.lineTo(-spR, 0); c.lineTo(-spR * 0.22, -spR * 0.22);
-    c.closePath();
-    c.fillStyle = pal.accent;
-    c.fill();
-    c.restore();
-
-    // three animated "typing" dots
+    // three status dots — a subtle, restrained pulse rather than a bounce
     for (let i = 0; i < 3; i += 1) {
       const dotX = bx + bw * (0.28 + i * 0.22);
       const dotY = by + bh * 0.5;
-      const phase = Math.sin(t * 5 - i * 0.8);
-      const s = 1 + 0.25 * Math.max(0, phase);
+      const s = 1 + 0.08 * Math.max(0, Math.sin(t * 3 - i * 0.6));
       c.save();
       c.translate(dotX, dotY);
       c.scale(s, s);
@@ -1248,35 +1154,8 @@
       y: cy + b.dy * h + Math.cos(t * b.speed * 0.8) * h * 0.015,
     }));
 
-    // thin connecting lines between blobs, like a constellation
-    c.save();
-    c.globalAlpha = 0.3;
-    c.strokeStyle = outline;
-    c.lineWidth = lw * 0.3;
-    c.setLineDash([3, 10]);
-    for (let i = 0; i < positions.length; i += 1) {
-      const next = positions[(i + 1) % positions.length];
-      c.beginPath();
-      c.moveTo(positions[i].x, positions[i].y);
-      c.lineTo(next.x, next.y);
-      c.stroke();
-    }
-    c.restore();
-
     blobs.forEach((b, i) => {
       const { x: bx, y: by } = positions[i];
-      // dotted orbit ring around the largest blob for extra texture
-      if (i === 0) {
-        c.save();
-        c.globalAlpha = 0.4;
-        c.setLineDash([2, 14]);
-        c.strokeStyle = outline;
-        c.lineWidth = lw * 0.3;
-        c.beginPath();
-        c.arc(bx, by, b.r * 1.35, 0, Math.PI * 2);
-        c.stroke();
-        c.restore();
-      }
       c.beginPath();
       c.arc(bx, by, b.r, 0, Math.PI * 2);
       strokeFill(c, b.color, outline, lw);
@@ -1291,15 +1170,6 @@
       c.fillStyle = b.color === pal.paper ? shade(pal.ink, 200) : shade(b.color, -35);
       c.fill();
       c.restore();
-    });
-
-    // small floating accent dots
-    [[0.32, -0.32, pal.accent], [-0.34, 0.3, pal.mid]].forEach(([dx, dy, color], i) => {
-      const ax = cx + dx * w + Math.sin(t * 1.3 + i) * w * 0.015;
-      const ay = cy + dy * h + Math.cos(t * 1.1 + i) * h * 0.012;
-      c.beginPath();
-      c.arc(ax, ay, w * 0.02, 0, Math.PI * 2);
-      strokeFill(c, color, outline, lw * 0.4);
     });
   }
 
