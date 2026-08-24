@@ -363,7 +363,7 @@
    * a nose, a composed closed-mouth expression, and layered hair —
    * deliberately not a stick-figure dot-eyes-and-arc face.
    */
-  function drawFace(c, cx, cy, headR, outline, lw, skinTone, hairColor) {
+  function drawFace(c, cx, cy, headR, outline, lw, skinTone, hairColor, hairStyle) {
     // ears (drawn first so hair can cover their top edge)
     [-1, 1].forEach((side) => {
       c.beginPath();
@@ -412,33 +412,54 @@
     c.lineWidth = lw * 0.28;
     c.stroke();
 
-    // composed, closed-mouth expression — confident rather than a cartoon grin
+    // warm, open smile with visible teeth — friendly and confident, matching
+    // the reference (this is a standard technique in trust-building
+    // "happy customer" illustrations, not a meme grin)
     c.beginPath();
-    c.moveTo(cx - headR * 0.2, cy + headR * 0.36);
-    c.quadraticCurveTo(cx, cy + headR * 0.44, cx + headR * 0.2, cy + headR * 0.36);
-    c.strokeStyle = outline;
-    c.lineWidth = lw * 0.32;
-    c.lineCap = 'round';
-    c.stroke();
-
-    // hair: cap over the crown + a couple of texture strands + side part
-    c.beginPath();
-    c.arc(cx, cy - headR * 0.14, headR * 1.06, Math.PI * 1.0, Math.PI * 2.0);
-    c.lineTo(cx + headR, cy + headR * 0.15);
-    c.quadraticCurveTo(cx, cy - headR * 0.3, cx - headR, cy + headR * 0.15);
+    c.moveTo(cx - headR * 0.26, cy + headR * 0.32);
+    c.quadraticCurveTo(cx, cy + headR * 0.58, cx + headR * 0.26, cy + headR * 0.32);
+    c.quadraticCurveTo(cx, cy + headR * 0.4, cx - headR * 0.26, cy + headR * 0.32);
     c.closePath();
-    strokeFill(c, hairColor, outline, lw * 0.4);
-    c.strokeStyle = shade(hairColor, hairColor === '#1c1c1c' ? 35 : -35);
-    c.lineWidth = lw * 0.18;
-    [-0.5, -0.1, 0.3].forEach((f) => {
+    strokeFill(c, '#ffffff', outline, lw * 0.3);
+
+    // hair
+    if (hairStyle === 'curly') {
+      drawCurlyHair(c, cx, cy, headR, hairColor, outline, lw);
+    } else {
       c.beginPath();
-      c.moveTo(cx + headR * f, cy - headR * 0.9);
-      c.quadraticCurveTo(cx + headR * f * 1.15, cy - headR * 0.55, cx + headR * f * 1.05, cy - headR * 0.25);
-      c.stroke();
+      c.arc(cx, cy - headR * 0.18, headR * 1.05, Math.PI * 1.02, Math.PI * 1.98);
+      c.lineTo(cx + headR * 0.96, cy - headR * 0.02);
+      c.quadraticCurveTo(cx + headR * 0.2, cy - headR * 0.42, cx - headR * 0.96, cy - headR * 0.02);
+      c.closePath();
+      strokeFill(c, hairColor, outline, lw * 0.4);
+      c.strokeStyle = shade(hairColor, hairColor === '#1c1c1c' ? 35 : -35);
+      c.lineWidth = lw * 0.18;
+      [-0.45, -0.05, 0.35].forEach((f) => {
+        c.beginPath();
+        c.moveTo(cx + headR * f, cy - headR * 0.88);
+        c.quadraticCurveTo(cx + headR * f * 1.15, cy - headR * 0.55, cx + headR * f * 1.05, cy - headR * 0.25);
+        c.stroke();
+      });
+    }
+  }
+
+  /** Cluster of overlapping circles around the head crown — reads as curly hair. */
+  function drawCurlyHair(c, cx, cy, headR, hairColor, outline, lw) {
+    const curls = [
+      { dx: -0.78, dy: -0.5, r: 0.34 }, { dx: -0.4, dy: -0.82, r: 0.37 },
+      { dx: 0.02, dy: -0.92, r: 0.38 }, { dx: 0.44, dy: -0.8, r: 0.36 },
+      { dx: 0.82, dy: -0.46, r: 0.32 }, { dx: -0.98, dy: -0.1, r: 0.28 },
+      { dx: 0.98, dy: -0.08, r: 0.27 }, { dx: -0.88, dy: 0.2, r: 0.22 },
+      { dx: 0.88, dy: 0.22, r: 0.21 },
+    ];
+    curls.forEach((k) => {
+      c.beginPath();
+      c.arc(cx + k.dx * headR, cy + k.dy * headR, k.r * headR, 0, Math.PI * 2);
+      strokeFill(c, hairColor, outline, lw * 0.35);
     });
   }
 
-  function drawPersonBust(c, cx, baseY, scale, pal, outline, lw, topColor, bob, skinTone, hairColor) {
+  function drawPersonBust(c, cx, baseY, scale, pal, outline, lw, topColor, bob, skinTone, hairColor, hairStyle) {
     const headR = scale * 0.17;
     const shoulderW = scale * 0.52;
     const shoulderH = scale * 0.36;
@@ -457,7 +478,7 @@
     strokeFill(c, topColor, outline, lw * 0.8);
 
     const headCY = cy - shoulderH * 1.08 - headR * 0.7;
-    drawFace(c, cx, headCY, headR, outline, lw, skinTone, hairColor);
+    drawFace(c, cx, headCY, headR, outline, lw, skinTone, hairColor, hairStyle);
 
     return { headCY, headR, cy, shoulderW, shoulderH };
   }
@@ -522,8 +543,8 @@
     // two people, sitting side by side inside the glass
     const seatY = frameBottom - glassInset - cardH * 0.02;
     const bob = Math.sin(t * 1.4) * cardH * 0.006;
-    drawPersonBust(c, -cardW * 0.16, seatY, cardH * 0.62, pal, outline, lw, pal.accent, bob, '#e8a26e', '#1c1c1c');
-    const driver = drawPersonBust(c, cardW * 0.17, seatY, cardH * 0.62, pal, outline, lw, pal.soft, -bob, '#c98a5e', '#a8552f');
+    drawPersonBust(c, -cardW * 0.16, seatY, cardH * 0.62, pal, outline, lw, pal.accent, bob, '#e8a26e', '#1c1c1c', 'curly');
+    const driver = drawPersonBust(c, cardW * 0.17, seatY, cardH * 0.62, pal, outline, lw, '#f7f4ee', -bob, '#e0a370', '#b0552a', 'short');
 
     // steering wheel in front of the driver
     c.save();
@@ -551,20 +572,23 @@
     strokeFill(c, pal.soft, outline, lw * 0.35);
     c.restore();
 
-    // side mirrors, peeking past the card edges
+    c.restore();
+
+    // side mirrors — drawn outside the card clip so they clearly stick out
+    // past the car body, like the reference's protruding mirror "ears"
     [-1, 1].forEach((side) => {
       c.save();
-      c.translate(side * cardW * 0.49, frameTop + cardH * 0.22);
+      c.translate(side * cardW * 0.49, frameTop + cardH * 0.24);
       c.beginPath();
-      c.moveTo(0, -cardH * 0.03);
-      c.quadraticCurveTo(side * cardW * 0.06, 0, 0, cardH * 0.03);
-      c.quadraticCurveTo(side * -cardW * 0.01, 0, 0, -cardH * 0.03);
+      c.moveTo(0, -cardH * 0.045);
+      c.quadraticCurveTo(side * cardW * 0.09, -cardH * 0.01, side * cardW * 0.08, cardH * 0.02);
+      c.quadraticCurveTo(side * cardW * 0.06, cardH * 0.045, 0, cardH * 0.045);
+      c.quadraticCurveTo(side * -cardW * 0.015, 0, 0, -cardH * 0.045);
       c.closePath();
-      strokeFill(c, pal.soft, outline, lw * 0.5);
+      strokeFill(c, pal.soft, outline, lw * 0.55);
       c.restore();
     });
 
-    c.restore();
     c.restore();
   }
 
