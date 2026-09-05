@@ -213,6 +213,59 @@ label {
 .vin-char.plant .box { background: #1e5c4a; }
 .vin-char.serial .box { background: #4a1e5c; }
 
+.parts-intro {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-top: 0;
+}
+
+.parts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.part-category {
+  background: #0c111c;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 4px 4px;
+}
+
+.part-category summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.part-category summary::-webkit-details-marker { display: none; }
+
+.part-category summary::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.part-category[open] summary::after { content: "−"; }
+
+.cat-icon { font-size: 1.05rem; }
+
+.part-category ul {
+  margin: 0;
+  padding: 0 16px 12px 34px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+
 .info-card ul {
   margin: 0;
   padding-left: 20px;

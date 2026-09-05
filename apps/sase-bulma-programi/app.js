@@ -52,29 +52,85 @@ function guessRegion(firstChar) {
   return "Bilinmiyor";
 }
 
-// Bilinen bazı WMI (ilk 3 hane) -> üretici eşlemeleri. Kapsamlı değildir;
-// yalnızca yaygın üreticiler için kaba bir tahmin sağlar.
+// Bilinen bazı WMI (ilk 3 hane) -> üretici eşlemeleri.
+// Bu program yalnızca Asya (özellikle Japonya ve Güney Kore) kökenli
+// markalara odaklanır; kapsam bilinçli olarak dar tutulmuştur ve
+// kapsamlı bir liste değildir — yalnızca yaygın modeller için kaba bir
+// tahmin sağlar. `brand` alanı parça kategorileri bölümünde marka
+// ailesini eşlemek için kullanılır.
 const WMI_TABLE = {
-  WVW: "Volkswagen (Binek)", WV1: "Volkswagen (Ticari)", WV2: "Volkswagen (Ticari)",
-  WBA: "BMW", WBS: "BMW M", WBY: "BMW (Elektrikli)",
-  WDB: "Mercedes-Benz", WDD: "Mercedes-Benz", WDC: "Mercedes-Benz (SUV)",
-  WAU: "Audi", TRU: "Audi (Macaristan)",
-  WP0: "Porsche", WP1: "Porsche (SUV)",
-  VF1: "Renault", VF3: "Peugeot", VF7: "Citroën",
-  ZFA: "Fiat", ZFF: "Ferrari", ZAR: "Alfa Romeo", ZLA: "Lancia",
-  SAJ: "Jaguar", SAL: "Land Rover", SCC: "Lotus",
-  JHM: "Honda (Japonya)", JH4: "Acura", JN1: "Nissan", JN8: "Nissan",
-  JT2: "Toyota", JT3: "Toyota", JTD: "Toyota", JTE: "Toyota (Lexus/SUV)",
-  JM1: "Mazda", JF1: "Subaru", JS2: "Suzuki", JS3: "Suzuki",
-  KMH: "Hyundai", KM8: "Hyundai (SUV)", KNA: "Kia", KND: "Kia (SUV)",
-  LFV: "FAW-Volkswagen (Çin)", LSV: "SAIC-Volkswagen (Çin)", LVS: "Ford (Çin)",
-  LGB: "Dongfeng (Çin)",
-  "1FA": "Ford", "1FM": "Ford (SUV)", "1FT": "Ford (Kamyonet)",
-  "1G1": "Chevrolet", "1GC": "Chevrolet (Kamyonet)", "1GM": "Pontiac",
-  "1HG": "Honda (Kuzey Amerika)", "1N4": "Nissan (Kuzey Amerika)",
-  "2T1": "Toyota (Kanada)", "3VW": "Volkswagen (Meksika)",
-  NMT: "Toyota (Türkiye)", "NM0": "Ford Otosan (Türkiye)",
-  NLE: "Tofaş / Fiat (Türkiye)", "NL5": "Tofaş / Fiat (Türkiye)",
+  // Toyota / Lexus
+  JT2: { brand: "Toyota", label: "Toyota" },
+  JT3: { brand: "Toyota", label: "Toyota" },
+  JTD: { brand: "Toyota", label: "Toyota" },
+  JTE: { brand: "Toyota", label: "Toyota (SUV)" },
+  JTH: { brand: "Lexus", label: "Lexus" },
+  JTJ: { brand: "Lexus", label: "Lexus (SUV)" },
+  "2T1": { brand: "Toyota", label: "Toyota (Kanada)" },
+  "4T1": { brand: "Toyota", label: "Toyota (ABD)" },
+  "5TD": { brand: "Toyota", label: "Toyota (ABD, Minivan/SUV)" },
+  NMT: { brand: "Toyota", label: "Toyota (Türkiye)" },
+
+  // Honda / Acura
+  JHM: { brand: "Honda", label: "Honda" },
+  JH4: { brand: "Acura", label: "Acura" },
+  "1HG": { brand: "Honda", label: "Honda (Kuzey Amerika)" },
+  "2HG": { brand: "Honda", label: "Honda (Kanada)" },
+  "19X": { brand: "Honda", label: "Honda (ABD)" },
+  "5FN": { brand: "Honda", label: "Honda (ABD, SUV)" },
+
+  // Nissan / Infiniti
+  JN1: { brand: "Nissan", label: "Nissan" },
+  JN8: { brand: "Nissan", label: "Nissan (SUV)" },
+  JNK: { brand: "Infiniti", label: "Infiniti" },
+  JNR: { brand: "Infiniti", label: "Infiniti (SUV)" },
+  "1N4": { brand: "Nissan", label: "Nissan (Kuzey Amerika)" },
+  "1N6": { brand: "Nissan", label: "Nissan (Kuzey Amerika, Kamyonet)" },
+  "3N1": { brand: "Nissan", label: "Nissan (Meksika)" },
+  "5N1": { brand: "Nissan", label: "Nissan (ABD, SUV)" },
+
+  // Mazda
+  JM1: { brand: "Mazda", label: "Mazda" },
+  JM3: { brand: "Mazda", label: "Mazda (SUV)" },
+  "4F2": { brand: "Mazda", label: "Mazda (ABD)" },
+  "1YV": { brand: "Mazda", label: "Mazda (ABD)" },
+
+  // Subaru
+  JF1: { brand: "Subaru", label: "Subaru" },
+  JF2: { brand: "Subaru", label: "Subaru (SUV)" },
+  "4S3": { brand: "Subaru", label: "Subaru (ABD)" },
+  "4S4": { brand: "Subaru", label: "Subaru (ABD, SUV)" },
+
+  // Suzuki
+  JS2: { brand: "Suzuki", label: "Suzuki" },
+  JS3: { brand: "Suzuki", label: "Suzuki (SUV)" },
+  JS4: { brand: "Suzuki", label: "Suzuki (SUV)" },
+
+  // Mitsubishi
+  JA3: { brand: "Mitsubishi", label: "Mitsubishi" },
+  JA4: { brand: "Mitsubishi", label: "Mitsubishi (SUV)" },
+  "4A3": { brand: "Mitsubishi", label: "Mitsubishi (ABD)" },
+  "4A4": { brand: "Mitsubishi", label: "Mitsubishi (ABD, SUV)" },
+
+  // Isuzu / Daihatsu
+  JAA: { brand: "Isuzu", label: "Isuzu" },
+  JDA: { brand: "Daihatsu", label: "Daihatsu" },
+
+  // Hyundai / Genesis
+  KMH: { brand: "Hyundai", label: "Hyundai" },
+  KM8: { brand: "Hyundai", label: "Hyundai (SUV)" },
+  "5NP": { brand: "Hyundai", label: "Hyundai (ABD)" },
+  "5NM": { brand: "Hyundai", label: "Hyundai (ABD, SUV)" },
+  KMT: { brand: "Genesis", label: "Genesis" },
+
+  // Kia
+  KNA: { brand: "Kia", label: "Kia" },
+  KND: { brand: "Kia", label: "Kia (SUV)" },
+  KNM: { brand: "Kia", label: "Kia (MPV)" },
+  "5XY": { brand: "Kia", label: "Kia (ABD)" },
+
+  // SsangYong
+  KPA: { brand: "SsangYong", label: "SsangYong" },
 };
 
 function decodeVin(rawVin) {
@@ -113,7 +169,9 @@ function decodeVin(rawVin) {
   const checkDigitValid = expectedCheckChar === checkDigitChar;
 
   const region = guessRegion(vin[0]);
-  const manufacturer = WMI_TABLE[wmi] || null;
+  const match = WMI_TABLE[wmi] || null;
+  const manufacturer = match ? match.label : null;
+  const brand = match ? match.brand : null;
 
   const years = YEAR_CODES[yearChar] || null;
 
@@ -124,6 +182,7 @@ function decodeVin(rawVin) {
     vds,
     region,
     manufacturer,
+    brand,
     checkDigitChar,
     expectedCheckChar,
     checkDigitValid,
@@ -133,6 +192,116 @@ function decodeVin(rawVin) {
     serial,
   };
 }
+
+// Kategori kategori genel parça referansı. VIN'den okunabilen tek bilgi
+// üretici (marka) olduğu için kategoriler markadan bağımsız, evrensel
+// parça gruplarıdır — belirli bir model/motora özel parça numarası
+// içermez (bunun için üreticinin resmi parça kataloğu gerekir).
+const PARTS_CATEGORIES = [
+  {
+    title: "Motor Parçaları",
+    icon: "🔧",
+    items: [
+      "Triger seti / zinciri", "Yağ pompası", "Silindir kapağı contası",
+      "Enjektörler", "Buji / bujiler", "Termostat", "Krank mili keçesi",
+      "Motor takozları (kulakları)",
+    ],
+  },
+  {
+    title: "Fren Sistemi",
+    icon: "🛑",
+    items: [
+      "Fren balatası (ön/arka)", "Fren diski", "Fren hidrolik hortumu",
+      "ABS sensörü", "Fren kaliperi", "El freni kablosu", "Fren hidrolik yağı",
+    ],
+  },
+  {
+    title: "Süspansiyon ve Direksiyon",
+    icon: "🚙",
+    items: [
+      "Amortisör (ön/arka)", "Salıncak / rot kolu", "Rotil",
+      "Stabilizör linki / lastiği", "Direksiyon kutusu", "Rot mili",
+      "Yay (helezon/makas)",
+    ],
+  },
+  {
+    title: "Şanzıman ve Aktarma Organları",
+    icon: "⚙️",
+    items: [
+      "Debriyaj seti", "Volan", "Şanzıman yağı / filtresi",
+      "Diferansiyel keçesi", "Aks (tekerlek mili)", "Aks körüğü",
+    ],
+  },
+  {
+    title: "Elektrik ve Elektronik",
+    icon: "🔋",
+    items: [
+      "Akü", "Alternatör", "Marş motoru", "ECU / motor beyni",
+      "Far / stop ampulü", "O2 (lambda) sensörü", "Krank / eksantrik sensörü",
+    ],
+  },
+  {
+    title: "Soğutma Sistemi",
+    icon: "❄️",
+    items: [
+      "Radyatör", "Su pompası", "Fan motoru", "Termostat muhafazası",
+      "Radyatör hortumu / kelepçesi", "Antifriz devresi conta seti",
+    ],
+  },
+  {
+    title: "Yakıt Sistemi",
+    icon: "⛽",
+    items: [
+      "Yakıt pompası", "Yakıt filtresi", "Yakıt enjektörü",
+      "Yakıt basınç regülatörü", "Yakıt deposu contası",
+    ],
+  },
+  {
+    title: "Egzoz Sistemi",
+    icon: "💨",
+    items: [
+      "Katalitik konvertör", "Susturucu (marşpiyel / orta / son)",
+      "Egzoz manifoldu contası", "Egzoz askı lastiği",
+    ],
+  },
+  {
+    title: "Filtreler",
+    icon: "🧹",
+    items: ["Hava filtresi", "Yağ filtresi", "Polen (kabin) filtresi", "Yakıt filtresi"],
+  },
+  {
+    title: "Kaporta ve Dış Aksam",
+    icon: "🚗",
+    items: [
+      "Tampon (ön/arka)", "Çamurluk", "Kaput", "Ayna grubu",
+      "Far / stop grubu", "Cam fitili / kelepçesi",
+    ],
+  },
+  {
+    title: "İç Aksam ve Döşeme",
+    icon: "🪑",
+    items: [
+      "Koltuk döşemesi", "Torpido", "Döşeme kaplaması",
+      "Elektrikli cam motoru (cam krikosu)", "Kapı kolu / kilit mekanizması",
+    ],
+  },
+  {
+    title: "Klima Sistemi",
+    icon: "🌬️",
+    items: [
+      "Klima kompresörü", "Kondenser", "Evaporatör",
+      "Klima gaz hattı / contası", "Kabin fanı motoru",
+    ],
+  },
+  {
+    title: "Hibrit / Elektrikli Sistem (yalnızca ilgili modellerde)",
+    icon: "⚡",
+    items: [
+      "Hibrit/EV batarya paketi", "İnvertör / konvertör ünitesi",
+      "Elektrik motoru", "Batarya soğutma fanı", "Şarj portu / kablosu",
+    ],
+  },
+];
 
 // ---- UI ----
 
@@ -144,19 +313,24 @@ const errorBox = document.getElementById("error-box");
 const resultSection = document.getElementById("result");
 const resultGrid = document.getElementById("result-grid");
 const vinVisual = document.getElementById("vin-visual");
+const partsSection = document.getElementById("parts");
+const partsIntro = document.getElementById("parts-intro");
+const partsGrid = document.getElementById("parts-grid");
 
 const SAMPLE_VINS = [
-  "WVWZZZ1JZXW000001",
   "1HGCM82633A004352",
-  "JTDBR32E720012345",
+  "JTDBR32EX20012345",
+  "KNADM4A33C6123456",
 ];
 let sampleIndex = 0;
 
 function render(vin) {
   errorBox.hidden = true;
   resultSection.hidden = true;
+  partsSection.hidden = true;
   resultGrid.innerHTML = "";
   vinVisual.innerHTML = "";
+  partsGrid.innerHTML = "";
 
   if (!vin) return;
 
@@ -177,8 +351,8 @@ function render(vin) {
       status: "ok",
     },
     {
-      label: "Tahmini Üretici",
-      value: result.manufacturer || "Bulunamadı (tanınmayan WMI kodu)",
+      label: "Tahmini Üretici (Asya markaları)",
+      value: result.manufacturer || "Bulunamadı (tanınmayan WMI veya Asya markası değil)",
       status: result.manufacturer ? "ok" : "warn",
     },
     {
@@ -231,6 +405,38 @@ function render(vin) {
       `;
       vinVisual.appendChild(wrapper);
     }
+  }
+
+  renderParts(result);
+}
+
+function renderParts(result) {
+  partsSection.hidden = false;
+
+  if (!result.manufacturer) {
+    partsIntro.innerHTML = `Bu WMI kodu (<strong>${result.wmi}</strong>) tabloda bulunamadı ya da bu programın kapsadığı bir Asya markasına ait değil. Bu araç şu anda yalnızca yaygın <strong>Japon ve Güney Kore</strong> markalarını (Toyota, Lexus, Honda, Acura, Nissan, Infiniti, Mazda, Subaru, Suzuki, Mitsubishi, Isuzu, Daihatsu, Hyundai, Genesis, Kia, SsangYong) kapsıyor.`;
+    return;
+  }
+
+  partsIntro.innerHTML = `<strong>${result.manufacturer}</strong> için genel parça kategorileri aşağıdadır. Bunlar VIN'den değil, bu markanın araçlarında tipik olarak bulunan parça gruplarından oluşan <strong>genel bir referanstır</strong> — tam uyum için modelinize/motor koduna özel resmi parça kataloğuna bakılmalıdır.`;
+
+  for (const category of PARTS_CATEGORIES) {
+    const details = document.createElement("details");
+    details.className = "part-category";
+
+    const summary = document.createElement("summary");
+    summary.innerHTML = `<span class="cat-icon">${category.icon}</span> ${category.title}`;
+    details.appendChild(summary);
+
+    const list = document.createElement("ul");
+    for (const item of category.items) {
+      const li = document.createElement("li");
+      li.textContent = item;
+      list.appendChild(li);
+    }
+    details.appendChild(list);
+
+    partsGrid.appendChild(details);
   }
 }
 

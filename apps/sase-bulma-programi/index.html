@@ -10,7 +10,7 @@
   <div class="wrap">
     <header>
       <h1>🚗 Şase Bulma Programı</h1>
-      <p class="subtitle">Şase (VIN) numarasını çözümleyin — üretici bölgesi, model yılı ve kontrol hanesi doğrulaması tamamen tarayıcınızda, hiçbir veri gönderilmeden yapılır.</p>
+      <p class="subtitle">Şase (VIN) numarasını çözümleyin — yalnızca <strong>Asya (Japon ve Güney Kore) markaları</strong> için üretici, model yılı ve kontrol hanesi doğrulamasının yanında, markaya uygun parçaları <strong>kategori kategori</strong> gösterir. Her şey tarayıcınızda, hiçbir veri gönderilmeden yapılır.</p>
     </header>
 
     <main>
@@ -23,7 +23,7 @@
             maxlength="17"
             autocomplete="off"
             spellcheck="false"
-            placeholder="Örn: WVWZZZ1JZXW000001"
+            placeholder="Örn: JTDBR32E720012345"
           >
           <button id="clear-btn" class="btn-secondary" type="button">Temizle</button>
         </div>
@@ -44,15 +44,22 @@
         </div>
       </section>
 
+      <section id="parts" class="card" hidden>
+        <h2>Uyumlu Parça Kategorileri</h2>
+        <p class="parts-intro" id="parts-intro"></p>
+        <div class="parts-grid" id="parts-grid"></div>
+      </section>
+
       <section class="card info-card">
         <h3>Bu araç ne yapar, ne yapmaz?</h3>
         <ul>
           <li>✅ VIN uzunluğu ve karakter kurallarını (I, O, Q kullanılmaz) denetler.</li>
-          <li>✅ ISO 3779 standardına göre <strong>üretici bölgesini</strong> (WMI'nin ilk hanesi) ve bilinen bazı üreticileri tahmin eder.</li>
+          <li>✅ Yalnızca <strong>Asya (Japon ve Güney Kore) markalarına</strong> odaklanır: Toyota, Lexus, Honda, Acura, Nissan, Infiniti, Mazda, Subaru, Suzuki, Mitsubishi, Isuzu, Daihatsu, Hyundai, Genesis, Kia, SsangYong.</li>
           <li>✅ 10. haneden <strong>olası model yıllarını</strong> hesaplar (kod 30 yılda bir tekrar ettiği için iki olasılık gösterilir).</li>
           <li>✅ 9. hanedeki <strong>kontrol basamağını</strong> yeniden hesaplayıp VIN'in yapısal olarak tutarlı olup olmadığını gösterir.</li>
-          <li>❌ Gerçek bir araç sicili/veritabanına bağlanmaz; belirli bir aracın plakasını, sahibini, hasar kaydını veya tam model/donanım bilgisini <strong>bulamaz</strong>.</li>
-          <li>❌ Sonuçlar bilgilendirme amaçlıdır; resmi işlemler için üretici yetkilisine veya ilgili resmi kuruma başvurun.</li>
+          <li>✅ Tanınan marka için, o markanın araçlarında tipik olarak bulunan parçaları <strong>12 kategoriye</strong> ayırarak listeler (genel referans, model/motora özel değildir).</li>
+          <li>❌ Gerçek bir araç sicili/veritabanına veya parça stok/fiyat sistemine bağlanmaz; belirli bir aracın plakasını, sahibini, hasar kaydını, tam model/donanımını veya gerçek parça numarasını <strong>bulamaz</strong>.</li>
+          <li>❌ Sonuçlar bilgilendirme amaçlıdır; resmi işlemler ve kesin parça uyumu için üretici yetkilisine, orijinal parça kataloğuna veya ilgili resmi kuruma başvurun.</li>
         </ul>
       </section>
     </main>
