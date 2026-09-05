@@ -337,22 +337,60 @@ function storeApiKey(key) {
   }
 }
 
+// Doğrudan çağrı CORS'a takılırsa, uygulama bir sunucudan servis ediliyorsa
+// aynı kaynaktaki /api/ proxy'si (tools/serve.mjs) denenir. Hangisinin
+// çalıştığı bir kez öğrenilip oturum boyunca kullanılır.
+let catalogTransport = null; // "direct" | "proxy"
+
+function proxyBase() {
+  return `${location.origin}/api/`;
+}
+
+async function rawCatalogRequest(base, endpoint, key) {
+  return fetch(base + endpoint, {
+    headers: { "x-rapidapi-key": key, "x-rapidapi-host": CATALOG_HOST },
+  });
+}
+
 async function catalogFetch(endpoint) {
   const key = getApiKey();
   if (!key) throw new CatalogError("API anahtarı girilmedi.");
 
+  const canUseProxy = location.protocol === "http:" || location.protocol === "https:";
+
   let res;
-  try {
-    res = await fetch(CATALOG_BASE + endpoint, {
-      headers: { "x-rapidapi-key": key, "x-rapidapi-host": CATALOG_HOST },
-    });
-  } catch (e) {
-    // fetch yalnızca ağ/CORS hatasında throw eder; HTTP hata kodlarında etmez.
-    throw new CatalogError(
-      "API'ye tarayıcıdan ulaşılamadı. Bu büyük ihtimalle CORS kısıtlaması " +
-        "(API'nin tarayıcıdan doğrudan çağrılmasına izin vermemesi) ya da bağlantı " +
-        "sorunudur. Ayrıntı için README'deki 'CORS' bölümüne bakın."
-    );
+  if (catalogTransport === "proxy") {
+    try {
+      res = await rawCatalogRequest(proxyBase(), endpoint, key);
+    } catch (e) {
+      throw new CatalogError("Yerel proxy'ye ulaşılamadı. tools/serve.mjs hâlâ çalışıyor mu?");
+    }
+  } else {
+    try {
+      res = await rawCatalogRequest(CATALOG_BASE, endpoint, key);
+      catalogTransport = "direct";
+    } catch (e) {
+      // fetch yalnızca ağ/CORS hatasında throw eder; HTTP hata kodlarında etmez.
+      if (canUseProxy) {
+        try {
+          res = await rawCatalogRequest(proxyBase(), endpoint, key);
+          catalogTransport = "proxy";
+        } catch (e2) {
+          throw new CatalogError(
+            "API'ye tarayıcıdan doğrudan ulaşılamadı (büyük ihtimalle CORS) ve yerel " +
+              "proxy de bulunamadı. Çözüm: uygulamayı `node tools/serve.mjs` ile " +
+              "başlatıp http://localhost:8080 adresinden açın. Ayrıntı için README'deki " +
+              "'CORS' bölümüne bakın."
+          );
+        }
+      } else {
+        throw new CatalogError(
+          "API'ye tarayıcıdan ulaşılamadı (büyük ihtimalle CORS). Dosyayı doğrudan " +
+            "açtığınız için proxy denenemedi — uygulamayı `node tools/serve.mjs` ile " +
+            "başlatıp http://localhost:8080 adresinden açın."
+        );
+      }
+    }
   }
 
   if (res.status === 401 || res.status === 403) {

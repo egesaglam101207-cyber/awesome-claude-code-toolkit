@@ -43,17 +43,28 @@ tarayıcıdan çağrılabilmesi için CORS başlıkları göndermesi gerekir. **
 karşı test edilememiştir** (geliştirme ortamının ağ politikası RapidAPI'yi engelliyor), dolayısıyla
 API'nin tarayıcı çağrılarına izin verip vermediği bilinmiyor.
 
-"API'ye tarayıcıdan ulaşılamadı" hatası alırsanız muhtemel sebep CORS'tur. Çözüm, isteği bir ara
-katmandan geçirmektir — örneğin küçük bir yerel proxy:
+Bunun için kutudan çıkan bir çözüm var: **`tools/serve.mjs`**. Bu betik uygulamayı localhost'tan
+servis eder ve `/api/` altındaki istekleri sunucu tarafından API'ye iletir; istek tarayıcı açısından
+aynı kaynaklı olduğu için CORS devreye girmez.
 
 ```bash
-# Basit bir yerel proxy örneği (Node.js)
-# İstekleri https://auto-parts-catalog.p.rapidapi.com adresine iletip
-# CORS başlıklarını ekleyen ~20 satırlık bir sunucu yeterlidir.
+cd apps/sase-bulma-programi
+node tools/serve.mjs          # http://localhost:8080
+# PORT=3000 node tools/serve.mjs   # farklı port
 ```
 
-Alternatif olarak, forkladığınız [tecdoc-autoparts-catalog](https://github.com/ronhartman/tecdoc-autoparts-catalog)
-Symfony uygulaması API'yi sunucu tarafından çağırdığı için CORS sorunu yaşamaz.
+Node.js 18+ gerekir, hiçbir bağımlılık kurmanız gerekmez.
+
+Uygulama bunu **otomatik** kullanır: önce API'yi doğrudan çağırmayı dener; CORS'a takılırsa ve sayfa
+bir sunucudan servis ediliyorsa `/api/` proxy'sine geçer. Yani `node tools/serve.mjs` ile açtığınızda
+her iki senaryoda da çalışır. `index.html`'i doğrudan çift tıklayarak açtığınızda proxy denenemez —
+CORS engeli varsa uygulama size betiği çalıştırmanızı söyleyen bir mesaj gösterir.
+
+API anahtarınız bu betikte **saklanmaz**; tarayıcıdan gelen `x-rapidapi-key` başlığı olduğu gibi
+iletilir.
+
+Alternatif olarak [tecdoc-autoparts-catalog](https://github.com/ronhartman/tecdoc-autoparts-catalog)
+Symfony uygulaması da API'yi sunucu tarafından çağırdığı için CORS sorunu yaşamaz.
 
 ## Kullanım
 
