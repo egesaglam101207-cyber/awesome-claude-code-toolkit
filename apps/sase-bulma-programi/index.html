@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Şase Bulma Programı</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🚗 Şase Bulma Programı</h1>
+      <p class="subtitle">Şase (VIN) numarasını çözümleyin — yalnızca <strong>Asya (Japon ve Güney Kore) markaları</strong> için üretici, model yılı ve kontrol hanesi doğrulamasının yanında, markaya uygun parçaları <strong>kategori kategori</strong> gösterir. Her şey tarayıcınızda, hiçbir veri gönderilmeden yapılır.</p>
+    </header>
+
+    <main>
+      <section class="card">
+        <label for="vin-input">Şase Numarası (VIN)</label>
+        <div class="input-row">
+          <input
+            id="vin-input"
+            type="text"
+            maxlength="17"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Örn: JTDBR32E720012345"
+          >
+          <button id="clear-btn" class="btn-secondary" type="button">Temizle</button>
+        </div>
+        <div class="input-meta">
+          <span id="char-count">0 / 17 karakter</span>
+          <button id="sample-btn" class="link-btn" type="button">Örnek VIN dene</button>
+        </div>
+        <div id="error-box" class="error-box" hidden></div>
+      </section>
+
+      <section id="result" class="card" hidden>
+        <h2>Sonuç</h2>
+        <div class="result-grid" id="result-grid"></div>
+
+        <div class="breakdown">
+          <h3>VIN Yapısı</h3>
+          <div class="vin-visual" id="vin-visual"></div>
+        </div>
+      </section>
+
+      <section id="parts" class="card" hidden>
+        <h2>Uyumlu Parça Kategorileri</h2>
+        <p class="parts-intro" id="parts-intro"></p>
+
+        <details class="api-panel" id="api-panel">
+          <summary>🔑 Gerçek parça numaraları için API anahtarı (isteğe bağlı)</summary>
+          <div class="api-body">
+            <p>
+              Aşağıya bir <strong>RapidAPI</strong> anahtarı girerseniz, aracınızın modeline ve
+              motoruna göre <strong>gerçek parça numaraları</strong> (muadil + OEM çapraz referans)
+              canlı olarak çekilir. Anahtar yalnızca kendi tarayıcınızda
+              (<code>localStorage</code>) saklanır ve istek doğrudan tarayıcınızdan API'ye gider.
+            </p>
+            <div class="input-row">
+              <input id="api-key-input" type="password" autocomplete="off" spellcheck="false"
+                     placeholder="RapidAPI anahtarınız">
+              <button id="api-key-save" class="btn-secondary" type="button">Kaydet</button>
+              <button id="api-key-clear" class="btn-secondary" type="button">Sil</button>
+            </div>
+            <p class="api-hint" id="api-key-status"></p>
+          </div>
+        </details>
+
+        <div id="live-catalog" hidden>
+          <div class="selector-row" id="selector-row"></div>
+          <div class="catalog-status" id="catalog-status"></div>
+          <div class="parts-grid" id="live-parts-grid"></div>
+        </div>
+
+        <div id="generic-parts">
+          <h3 class="generic-heading" id="generic-heading">Genel parça kategorileri</h3>
+          <div class="parts-grid" id="parts-grid"></div>
+        </div>
+      </section>
+
+      <section class="card info-card">
+        <h3>Bu araç ne yapar, ne yapmaz?</h3>
+        <ul>
+          <li>✅ VIN uzunluğu ve karakter kurallarını (I, O, Q kullanılmaz) denetler.</li>
+          <li>✅ Yalnızca <strong>Asya (Japon ve Güney Kore) markalarına</strong> odaklanır: Toyota, Lexus, Honda, Acura, Nissan, Infiniti, Mazda, Subaru, Suzuki, Mitsubishi, Isuzu, Daihatsu, Hyundai, Genesis, Kia, SsangYong.</li>
+          <li>✅ 10. haneden <strong>olası model yıllarını</strong> hesaplar (kod 30 yılda bir tekrar ettiği için iki olasılık gösterilir).</li>
+          <li>✅ 9. hanedeki <strong>kontrol basamağını</strong> yeniden hesaplayıp VIN'in yapısal olarak tutarlı olup olmadığını gösterir.</li>
+          <li>✅ Tanınan marka için, o markanın araçlarında tipik olarak bulunan parçaları <strong>12 kategoriye</strong> ayırarak listeler (genel referans, model/motora özel değildir).</li>
+          <li>✅ İsteğe bağlı bir <strong>RapidAPI anahtarı</strong> girilirse, model ve motor seçildikten sonra <strong>gerçek parça numaralarını</strong> canlı olarak çeker (anahtar yalnızca tarayıcınızda saklanır).</li>
+          <li>⚠️ API'den gelen numaralar, sağlayıcısının kendi ifadesiyle <strong>resmi olmayan</strong> bir toplulaştırılmış veritabanından gelir — satın almadan önce aracınızın modeli/motoruyla teyit edin.</li>
+          <li>❌ Gerçek bir araç siciline bağlanmaz; belirli bir aracın plakasını, sahibini, hasar kaydını veya tam donanımını <strong>bulamaz</strong>.</li>
+          <li>❌ Sonuçlar bilgilendirme amaçlıdır; resmi işlemler ve kesin parça uyumu için üretici yetkilisine, orijinal parça kataloğuna veya ilgili resmi kuruma başvurun.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>Tamamen istemci taraflı (HTML/CSS/JS) — kurulum veya internet bağlantısı gerekmez.</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
