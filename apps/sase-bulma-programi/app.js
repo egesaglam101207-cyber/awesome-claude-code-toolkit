@@ -52,86 +52,149 @@ function guessRegion(firstChar) {
   return "Bilinmiyor";
 }
 
-// Bilinen bazı WMI (ilk 3 hane) -> üretici eşlemeleri.
-// Bu program yalnızca Asya (özellikle Japonya ve Güney Kore) kökenli
-// markalara odaklanır; kapsam bilinçli olarak dar tutulmuştur ve
-// kapsamlı bir liste değildir — yalnızca yaygın modeller için kaba bir
-// tahmin sağlar. `brand` alanı parça kategorileri bölümünde marka
-// ailesini eşlemek için kullanılır.
+// WMI (ilk 3 hane) -> üretici eşlemeleri.
+//
+// Bu program yalnızca Asya (Japonya, Güney Kore) kökenli MARKALARA odaklanır;
+// ancak bu markaların Türkiye, Avrupa, Hindistan, Tayland vb. fabrikalarında
+// üretilen araçları da kapsar — çünkü bir Hyundai i20 Türkiye'de üretildiğinde
+// WMI'si "NLH" olur, "KMH" değil.
+//
+// Veri kaynağı: Wikipedia WMI listesinden türetilmiş açık veri seti
+// (github.com/WALL-E/vin-decoder, csv/wmi-from-wiki.csv) — Asya markalarına
+// göre süzülmüştür. Ticari araç/kamyon ve motosiklet kodları alınmamıştır.
+//
+// `brand` alanı parça kategorileri ve canlı katalog eşleşmesi için kullanılır.
 const WMI_TABLE = {
-  // Toyota / Lexus
-  JT2: { brand: "Toyota", label: "Toyota" },
-  JT3: { brand: "Toyota", label: "Toyota" },
-  JTD: { brand: "Toyota", label: "Toyota" },
-  JTE: { brand: "Toyota", label: "Toyota (SUV)" },
+  // --- Toyota / Lexus ---
   JTH: { brand: "Lexus", label: "Lexus" },
   JTJ: { brand: "Lexus", label: "Lexus (SUV)" },
-  "2T1": { brand: "Toyota", label: "Toyota (Kanada)" },
-  "4T1": { brand: "Toyota", label: "Toyota (ABD)" },
-  "5TD": { brand: "Toyota", label: "Toyota (ABD, Minivan/SUV)" },
-  NMT: { brand: "Toyota", label: "Toyota (Türkiye)" },
+  NMT: { brand: "Toyota", label: "Toyota (Türkiye – Sakarya)" },
+  SB1: { brand: "Toyota", label: "Toyota (İngiltere)" },
+  VNK: { brand: "Toyota", label: "Toyota (Fransa)" },
+  TW1: { brand: "Toyota", label: "Toyota (Portekiz – Caetano)" },
+  AHT: { brand: "Toyota", label: "Toyota (Güney Afrika)" },
+  MR0: { brand: "Toyota", label: "Toyota (Tayland)" },
+  MBJ: { brand: "Toyota", label: "Toyota (Hindistan)" },
+  MHF: { brand: "Toyota", label: "Toyota (Endonezya)" },
+  LTV: { brand: "Toyota", label: "Toyota (Çin – Tianjin)" },
+  "6T1": { brand: "Toyota", label: "Toyota (Avustralya)" },
+  "8AJ": { brand: "Toyota", label: "Toyota (Arjantin)" },
+  "93R": { brand: "Toyota", label: "Toyota (Brezilya)" },
+  "9BR": { brand: "Toyota", label: "Toyota (Brezilya)" },
 
-  // Honda / Acura
-  JHM: { brand: "Honda", label: "Honda" },
-  JH4: { brand: "Acura", label: "Acura" },
-  "1HG": { brand: "Honda", label: "Honda (Kuzey Amerika)" },
+  // --- Honda / Acura ---
+  NLA: { brand: "Honda", label: "Honda (Türkiye – Gebze)" },
+  SHH: { brand: "Honda", label: "Honda (İngiltere)" },
+  SHS: { brand: "Honda", label: "Honda (İngiltere)" },
+  MLH: { brand: "Honda", label: "Honda (Tayland)" },
+  MRH: { brand: "Honda", label: "Honda (Tayland)" },
+  MAK: { brand: "Honda", label: "Honda (Hindistan)" },
+  MHR: { brand: "Honda", label: "Honda (Endonezya)" },
+  LUC: { brand: "Honda", label: "Honda (Çin – Guangqi)" },
   "2HG": { brand: "Honda", label: "Honda (Kanada)" },
-  "19X": { brand: "Honda", label: "Honda (ABD)" },
-  "5FN": { brand: "Honda", label: "Honda (ABD, SUV)" },
+  "2HJ": { brand: "Honda", label: "Honda (Kanada)" },
+  "2HK": { brand: "Honda", label: "Honda (Kanada)" },
+  "5FN": { brand: "Honda", label: "Honda (ABD – Alabama)" },
+  "93H": { brand: "Honda", label: "Honda (Brezilya)" },
 
-  // Nissan / Infiniti
-  JN1: { brand: "Nissan", label: "Nissan" },
-  JN8: { brand: "Nissan", label: "Nissan (SUV)" },
+  // --- Nissan / Infiniti ---
   JNK: { brand: "Infiniti", label: "Infiniti" },
   JNR: { brand: "Infiniti", label: "Infiniti (SUV)" },
-  "1N4": { brand: "Nissan", label: "Nissan (Kuzey Amerika)" },
-  "1N6": { brand: "Nissan", label: "Nissan (Kuzey Amerika, Kamyonet)" },
-  "3N1": { brand: "Nissan", label: "Nissan (Meksika)" },
-  "5N1": { brand: "Nissan", label: "Nissan (ABD, SUV)" },
+  SJN: { brand: "Nissan", label: "Nissan (İngiltere – Sunderland)" },
+  VSK: { brand: "Nissan", label: "Nissan (İspanya)" },
+  VWA: { brand: "Nissan", label: "Nissan (İspanya)" },
+  MNT: { brand: "Nissan", label: "Nissan (Tayland)" },
+  MDH: { brand: "Nissan", label: "Nissan (Hindistan)" },
+  "6F4": { brand: "Nissan", label: "Nissan (Avustralya)" },
+  "94D": { brand: "Nissan", label: "Nissan (Brezilya)" },
 
-  // Mazda
-  JM1: { brand: "Mazda", label: "Mazda" },
-  JM3: { brand: "Mazda", label: "Mazda (SUV)" },
-  "4F2": { brand: "Mazda", label: "Mazda (ABD)" },
-  "1YV": { brand: "Mazda", label: "Mazda (ABD)" },
-
-  // Subaru
-  JF1: { brand: "Subaru", label: "Subaru" },
-  JF2: { brand: "Subaru", label: "Subaru (SUV)" },
-  "4S3": { brand: "Subaru", label: "Subaru (ABD)" },
-  "4S4": { brand: "Subaru", label: "Subaru (ABD, SUV)" },
-
-  // Suzuki
-  JS2: { brand: "Suzuki", label: "Suzuki" },
-  JS3: { brand: "Suzuki", label: "Suzuki (SUV)" },
-  JS4: { brand: "Suzuki", label: "Suzuki (SUV)" },
-
-  // Mitsubishi
-  JA3: { brand: "Mitsubishi", label: "Mitsubishi" },
-  JA4: { brand: "Mitsubishi", label: "Mitsubishi (SUV)" },
-  "4A3": { brand: "Mitsubishi", label: "Mitsubishi (ABD)" },
-  "4A4": { brand: "Mitsubishi", label: "Mitsubishi (ABD, SUV)" },
-
-  // Isuzu / Daihatsu
-  JAA: { brand: "Isuzu", label: "Isuzu" },
-  JDA: { brand: "Daihatsu", label: "Daihatsu" },
-
-  // Hyundai / Genesis
-  KMH: { brand: "Hyundai", label: "Hyundai" },
-  KM8: { brand: "Hyundai", label: "Hyundai (SUV)" },
+  // --- Hyundai / Genesis ---
+  NLH: { brand: "Hyundai", label: "Hyundai (Türkiye – Assan, İzmit)" },
+  TMA: { brand: "Hyundai", label: "Hyundai (Çekya)" },
+  MAL: { brand: "Hyundai", label: "Hyundai (Hindistan)" },
+  LBE: { brand: "Hyundai", label: "Hyundai (Çin – Beijing Hyundai)" },
+  AC5: { brand: "Hyundai", label: "Hyundai (Güney Afrika)" },
+  ADD: { brand: "Hyundai", label: "Hyundai (Güney Afrika)" },
+  X7M: { brand: "Hyundai", label: "Hyundai (Rusya – TagAZ)" },
+  "2HM": { brand: "Hyundai", label: "Hyundai (Kanada)" },
   "5NP": { brand: "Hyundai", label: "Hyundai (ABD)" },
   "5NM": { brand: "Hyundai", label: "Hyundai (ABD, SUV)" },
   KMT: { brand: "Genesis", label: "Genesis" },
 
-  // Kia
-  KNA: { brand: "Kia", label: "Kia" },
-  KND: { brand: "Kia", label: "Kia (SUV)" },
-  KNM: { brand: "Kia", label: "Kia (MPV)" },
+  // --- Kia ---
+  U5Y: { brand: "Kia", label: "Kia (Slovakya)" },
+  U6Y: { brand: "Kia", label: "Kia (Slovakya)" },
   "5XY": { brand: "Kia", label: "Kia (ABD)" },
 
-  // SsangYong
+  // --- Mazda ---
+  JMZ: { brand: "Mazda", label: "Mazda" },
+  YCM: { brand: "Mazda", label: "Mazda (Belçika)" },
+  MM8: { brand: "Mazda", label: "Mazda (Tayland)" },
+  PE3: { brand: "Mazda", label: "Mazda (Filipinler)" },
+  "3MZ": { brand: "Mazda", label: "Mazda (Meksika)" },
+  "1YV": { brand: "Mazda", label: "Mazda (ABD)" },
+
+  // --- Mitsubishi ---
+  JMB: { brand: "Mitsubishi", label: "Mitsubishi" },
+  JMY: { brand: "Mitsubishi", label: "Mitsubishi" },
+  XMC: { brand: "Mitsubishi", label: "Mitsubishi (Hollanda – NedCar)" },
+  MMB: { brand: "Mitsubishi", label: "Mitsubishi (Tayland)" },
+  MMC: { brand: "Mitsubishi", label: "Mitsubishi (Tayland)" },
+  MMT: { brand: "Mitsubishi", label: "Mitsubishi (Tayland)" },
+  MA7: { brand: "Mitsubishi", label: "Mitsubishi (Hindistan)" },
+  "6MM": { brand: "Mitsubishi", label: "Mitsubishi (Avustralya)" },
+  "93X": { brand: "Mitsubishi", label: "Mitsubishi (Brezilya)" },
+
+  // --- Suzuki ---
+  TSM: { brand: "Suzuki", label: "Suzuki (Macaristan)" },
+  MA3: { brand: "Suzuki", label: "Suzuki / Maruti (Hindistan)" },
+  MBH: { brand: "Suzuki", label: "Suzuki / Maruti (Hindistan)" },
+  MLC: { brand: "Suzuki", label: "Suzuki (Tayland)" },
+  VSE: { brand: "Suzuki", label: "Suzuki (İspanya – Santana)" },
+  "8AK": { brand: "Suzuki", label: "Suzuki (Arjantin)" },
+
+  // --- Isuzu / Daihatsu / SsangYong ---
+  MP1: { brand: "Isuzu", label: "Isuzu (Tayland)" },
+  MPA: { brand: "Isuzu", label: "Isuzu (Tayland)" },
+  LZE: { brand: "Isuzu", label: "Isuzu (Çin – Guangzhou)" },
   KPA: { brand: "SsangYong", label: "SsangYong" },
+  KPT: { brand: "SsangYong", label: "SsangYong" },
 };
+
+// Bazı üreticiler için WMI'nin yalnızca ilk 2 hanesi markayı belirler
+// (3. hane model/gövde tipine göre değişir). 3 haneli tabloda tam eşleşme
+// bulunamazsa buraya düşülür — böylece JTD/JTE/JT2… hepsi Toyota'ya,
+// KMH/KMF/KM8… hepsi Hyundai'ye eşleşir.
+const WMI_PREFIX_TABLE = {
+  JT: { brand: "Toyota", label: "Toyota (Japonya)" },
+  JH: { brand: "Honda", label: "Honda (Japonya)" },
+  JN: { brand: "Nissan", label: "Nissan (Japonya)" },
+  JM: { brand: "Mazda", label: "Mazda (Japonya)" },
+  JF: { brand: "Subaru", label: "Subaru (Japonya)" },
+  JS: { brand: "Suzuki", label: "Suzuki (Japonya)" },
+  JA: { brand: "Isuzu", label: "Isuzu (Japonya)" },
+  JD: { brand: "Daihatsu", label: "Daihatsu (Japonya)" },
+  KM: { brand: "Hyundai", label: "Hyundai (Güney Kore)" },
+  KN: { brand: "Kia", label: "Kia (Güney Kore)" },
+  "1H": { brand: "Honda", label: "Honda (ABD)" },
+  "1N": { brand: "Nissan", label: "Nissan (ABD)" },
+  "2T": { brand: "Toyota", label: "Toyota (Kanada)" },
+  "3H": { brand: "Honda", label: "Honda (Meksika)" },
+  "3N": { brand: "Nissan", label: "Nissan (Meksika)" },
+  "4F": { brand: "Mazda", label: "Mazda (ABD)" },
+  "4S": { brand: "Subaru", label: "Subaru (ABD)" },
+  "4T": { brand: "Toyota", label: "Toyota (ABD)" },
+  "5F": { brand: "Honda", label: "Honda (ABD – Alabama)" },
+  "5N": { brand: "Nissan", label: "Nissan (ABD)" },
+  "5T": { brand: "Toyota", label: "Toyota (ABD)" },
+};
+
+function lookupWmi(wmi) {
+  if (WMI_TABLE[wmi]) return WMI_TABLE[wmi];
+  const prefix = wmi.slice(0, 2);
+  if (WMI_PREFIX_TABLE[prefix]) return WMI_PREFIX_TABLE[prefix];
+  return null;
+}
 
 function decodeVin(rawVin) {
   const vin = rawVin.toUpperCase().trim();
@@ -168,8 +231,14 @@ function decodeVin(rawVin) {
   const expectedCheckChar = remainder === 10 ? "X" : String(remainder);
   const checkDigitValid = expectedCheckChar === checkDigitChar;
 
+  // Kontrol basamağı yalnızca Kuzey Amerika pazarı için zorunludur
+  // (ISO 3779 bunu opsiyonel bırakır). Avrupa/Asya üretimi birçok araçta
+  // bu hane başka bir amaçla kullanılır; "uyuşmuyor" çıkması aracın sahte
+  // olduğu anlamına gelmez.
+  const checkDigitRequired = /[1-5]/.test(vin[0]);
+
   const region = guessRegion(vin[0]);
-  const match = WMI_TABLE[wmi] || null;
+  const match = lookupWmi(wmi);
   const manufacturer = match ? match.label : null;
   const brand = match ? match.brand : null;
 
@@ -186,6 +255,7 @@ function decodeVin(rawVin) {
     checkDigitChar,
     expectedCheckChar,
     checkDigitValid,
+    checkDigitRequired,
     yearChar,
     years,
     plantChar,
@@ -519,8 +589,10 @@ function render(vin) {
       label: "Kontrol Basamağı (9. hane)",
       value: result.checkDigitValid
         ? `Geçerli (${result.checkDigitChar})`
-        : `Uyuşmuyor — beklenen "${result.expectedCheckChar}", girilen "${result.checkDigitChar}"`,
-      status: result.checkDigitValid ? "ok" : "warn",
+        : result.checkDigitRequired
+          ? `Uyuşmuyor — beklenen "${result.expectedCheckChar}", girilen "${result.checkDigitChar}"`
+          : `Bu pazarda zorunlu değil (hane: ${result.checkDigitChar})`,
+      status: result.checkDigitValid ? "ok" : result.checkDigitRequired ? "warn" : "",
     },
     {
       label: "Olası Model Yılı",
