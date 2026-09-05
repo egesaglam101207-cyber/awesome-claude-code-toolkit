@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Şase Bulma Programı</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🚗 Şase Bulma Programı</h1>
+      <p class="subtitle">Şase (VIN) numarasını çözümleyin — üretici bölgesi, model yılı ve kontrol hanesi doğrulaması tamamen tarayıcınızda, hiçbir veri gönderilmeden yapılır.</p>
+    </header>
+
+    <main>
+      <section class="card">
+        <label for="vin-input">Şase Numarası (VIN)</label>
+        <div class="input-row">
+          <input
+            id="vin-input"
+            type="text"
+            maxlength="17"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Örn: WVWZZZ1JZXW000001"
+          >
+          <button id="clear-btn" class="btn-secondary" type="button">Temizle</button>
+        </div>
+        <div class="input-meta">
+          <span id="char-count">0 / 17 karakter</span>
+          <button id="sample-btn" class="link-btn" type="button">Örnek VIN dene</button>
+        </div>
+        <div id="error-box" class="error-box" hidden></div>
+      </section>
+
+      <section id="result" class="card" hidden>
+        <h2>Sonuç</h2>
+        <div class="result-grid" id="result-grid"></div>
+
+        <div class="breakdown">
+          <h3>VIN Yapısı</h3>
+          <div class="vin-visual" id="vin-visual"></div>
+        </div>
+      </section>
+
+      <section class="card info-card">
+        <h3>Bu araç ne yapar, ne yapmaz?</h3>
+        <ul>
+          <li>✅ VIN uzunluğu ve karakter kurallarını (I, O, Q kullanılmaz) denetler.</li>
+          <li>✅ ISO 3779 standardına göre <strong>üretici bölgesini</strong> (WMI'nin ilk hanesi) ve bilinen bazı üreticileri tahmin eder.</li>
+          <li>✅ 10. haneden <strong>olası model yıllarını</strong> hesaplar (kod 30 yılda bir tekrar ettiği için iki olasılık gösterilir).</li>
+          <li>✅ 9. hanedeki <strong>kontrol basamağını</strong> yeniden hesaplayıp VIN'in yapısal olarak tutarlı olup olmadığını gösterir.</li>
+          <li>❌ Gerçek bir araç sicili/veritabanına bağlanmaz; belirli bir aracın plakasını, sahibini, hasar kaydını veya tam model/donanım bilgisini <strong>bulamaz</strong>.</li>
+          <li>❌ Sonuçlar bilgilendirme amaçlıdır; resmi işlemler için üretici yetkilisine veya ilgili resmi kuruma başvurun.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>Tamamen istemci taraflı (HTML/CSS/JS) — kurulum veya internet bağlantısı gerekmez.</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
