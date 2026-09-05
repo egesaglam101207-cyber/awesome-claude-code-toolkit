@@ -266,6 +266,145 @@ label {
   line-height: 1.7;
 }
 
+/* --- API anahtarı paneli --- */
+
+.api-panel {
+  background: #0c111c;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.api-panel summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.api-body {
+  padding: 0 14px 14px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.api-body code {
+  background: var(--accent-dim);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+#api-key-input {
+  flex: 1;
+  background: #060a12;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+#api-key-input:focus { border-color: var(--accent); }
+
+.api-hint { margin: 10px 0 0; font-size: 0.8rem; }
+.api-hint.ok { color: var(--good); }
+.api-hint.warn { color: var(--warn); }
+.api-hint.error { color: var(--bad); }
+
+/* --- Canlı katalog seçicileri --- */
+
+.selector-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.selector label {
+  font-size: 0.7rem;
+  margin-bottom: 4px;
+}
+
+.selector select {
+  width: 100%;
+  background: #0c111c;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.selector select:focus { border-color: var(--accent); }
+
+.catalog-status {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 12px;
+  min-height: 1.2em;
+}
+
+.catalog-status.ok { color: var(--good); }
+.catalog-status.warn { color: var(--warn); }
+.catalog-status.error { color: var(--bad); }
+.catalog-status.loading { color: var(--accent); }
+
+.part-category.live { grid-column: 1 / -1; }
+
+.live-body { padding: 0 12px 12px; }
+
+.live-body .part-category {
+  margin-top: 6px;
+  background: #070b13;
+}
+
+.loading-line {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+
+.loading-line.error { color: var(--bad); }
+
+.articles-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin-top: 8px;
+  display: block;
+  overflow-x: auto;
+}
+
+.articles-table th,
+.articles-table td {
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--panel-border);
+  white-space: nowrap;
+}
+
+.articles-table th {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.articles-table .article-no {
+  font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.generic-heading {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin: 22px 0 10px;
+}
+
 .info-card ul {
   margin: 0;
   padding-left: 20px;

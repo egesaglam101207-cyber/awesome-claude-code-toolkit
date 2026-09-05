@@ -47,7 +47,36 @@
       <section id="parts" class="card" hidden>
         <h2>Uyumlu Parça Kategorileri</h2>
         <p class="parts-intro" id="parts-intro"></p>
-        <div class="parts-grid" id="parts-grid"></div>
+
+        <details class="api-panel" id="api-panel">
+          <summary>🔑 Gerçek parça numaraları için API anahtarı (isteğe bağlı)</summary>
+          <div class="api-body">
+            <p>
+              Aşağıya bir <strong>RapidAPI</strong> anahtarı girerseniz, aracınızın modeline ve
+              motoruna göre <strong>gerçek parça numaraları</strong> (muadil + OEM çapraz referans)
+              canlı olarak çekilir. Anahtar yalnızca kendi tarayıcınızda
+              (<code>localStorage</code>) saklanır ve istek doğrudan tarayıcınızdan API'ye gider.
+            </p>
+            <div class="input-row">
+              <input id="api-key-input" type="password" autocomplete="off" spellcheck="false"
+                     placeholder="RapidAPI anahtarınız">
+              <button id="api-key-save" class="btn-secondary" type="button">Kaydet</button>
+              <button id="api-key-clear" class="btn-secondary" type="button">Sil</button>
+            </div>
+            <p class="api-hint" id="api-key-status"></p>
+          </div>
+        </details>
+
+        <div id="live-catalog" hidden>
+          <div class="selector-row" id="selector-row"></div>
+          <div class="catalog-status" id="catalog-status"></div>
+          <div class="parts-grid" id="live-parts-grid"></div>
+        </div>
+
+        <div id="generic-parts">
+          <h3 class="generic-heading" id="generic-heading">Genel parça kategorileri</h3>
+          <div class="parts-grid" id="parts-grid"></div>
+        </div>
       </section>
 
       <section class="card info-card">
@@ -58,7 +87,9 @@
           <li>✅ 10. haneden <strong>olası model yıllarını</strong> hesaplar (kod 30 yılda bir tekrar ettiği için iki olasılık gösterilir).</li>
           <li>✅ 9. hanedeki <strong>kontrol basamağını</strong> yeniden hesaplayıp VIN'in yapısal olarak tutarlı olup olmadığını gösterir.</li>
           <li>✅ Tanınan marka için, o markanın araçlarında tipik olarak bulunan parçaları <strong>12 kategoriye</strong> ayırarak listeler (genel referans, model/motora özel değildir).</li>
-          <li>❌ Gerçek bir araç sicili/veritabanına veya parça stok/fiyat sistemine bağlanmaz; belirli bir aracın plakasını, sahibini, hasar kaydını, tam model/donanımını veya gerçek parça numarasını <strong>bulamaz</strong>.</li>
+          <li>✅ İsteğe bağlı bir <strong>RapidAPI anahtarı</strong> girilirse, model ve motor seçildikten sonra <strong>gerçek parça numaralarını</strong> canlı olarak çeker (anahtar yalnızca tarayıcınızda saklanır).</li>
+          <li>⚠️ API'den gelen numaralar, sağlayıcısının kendi ifadesiyle <strong>resmi olmayan</strong> bir toplulaştırılmış veritabanından gelir — satın almadan önce aracınızın modeli/motoruyla teyit edin.</li>
+          <li>❌ Gerçek bir araç siciline bağlanmaz; belirli bir aracın plakasını, sahibini, hasar kaydını veya tam donanımını <strong>bulamaz</strong>.</li>
           <li>❌ Sonuçlar bilgilendirme amaçlıdır; resmi işlemler ve kesin parça uyumu için üretici yetkilisine, orijinal parça kataloğuna veya ilgili resmi kuruma başvurun.</li>
         </ul>
       </section>

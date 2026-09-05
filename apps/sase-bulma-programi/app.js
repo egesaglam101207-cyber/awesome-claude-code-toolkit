@@ -303,6 +303,118 @@ const PARTS_CATEGORIES = [
   },
 ];
 
+// ---- Canlı parça kataloğu (RapidAPI "Auto Parts Catalog", TecDoc tarzı) ----
+//
+// Uç nokta yolları ve cevap alan adları, bu API'yi kullanan açık kaynak
+// referans uygulamasından (ronhartman/tecdoc-autoparts-catalog, Symfony)
+// birebir alınmıştır — tahmin edilmemiştir.
+//
+// Akış: marka (VIN'den) -> model -> motor tipi (vehicleId) -> kategori ->
+// parçalar (articleNo = parça numarası).
+
+const CATALOG_HOST = "auto-parts-catalog.p.rapidapi.com";
+const CATALOG_BASE = `https://${CATALOG_HOST}/`;
+const API_KEY_STORAGE = "sase-bulma-rapidapi-key";
+const TYPE_ID_AUTOMOBILE = 1; // ApplicationConstants::TYPE_AUTOMOBILE
+
+class CatalogError extends Error {}
+
+function getApiKey() {
+  try {
+    return localStorage.getItem(API_KEY_STORAGE) || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function storeApiKey(key) {
+  try {
+    if (key) localStorage.setItem(API_KEY_STORAGE, key);
+    else localStorage.removeItem(API_KEY_STORAGE);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function catalogFetch(endpoint) {
+  const key = getApiKey();
+  if (!key) throw new CatalogError("API anahtarı girilmedi.");
+
+  let res;
+  try {
+    res = await fetch(CATALOG_BASE + endpoint, {
+      headers: { "x-rapidapi-key": key, "x-rapidapi-host": CATALOG_HOST },
+    });
+  } catch (e) {
+    // fetch yalnızca ağ/CORS hatasında throw eder; HTTP hata kodlarında etmez.
+    throw new CatalogError(
+      "API'ye tarayıcıdan ulaşılamadı. Bu büyük ihtimalle CORS kısıtlaması " +
+        "(API'nin tarayıcıdan doğrudan çağrılmasına izin vermemesi) ya da bağlantı " +
+        "sorunudur. Ayrıntı için README'deki 'CORS' bölümüne bakın."
+    );
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    throw new CatalogError("API anahtarı geçersiz ya da bu API'ye aboneliğiniz yok (HTTP " + res.status + ").");
+  }
+  if (res.status === 429) {
+    throw new CatalogError("Ücretsiz plan kotanız dolmuş görünüyor (HTTP 429).");
+  }
+  if (!res.ok) {
+    throw new CatalogError(`API beklenmeyen bir yanıt döndürdü (HTTP ${res.status}).`);
+  }
+
+  try {
+    return await res.json();
+  } catch (e) {
+    throw new CatalogError("API yanıtı okunamadı (geçersiz JSON).");
+  }
+}
+
+// API bazı listeleri doğrudan dizi, bazılarını sarmalanmış nesne olarak
+// döndürebiliyor; her iki durumu da tolere et.
+function asArray(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
+  for (const value of Object.values(payload)) {
+    if (Array.isArray(value)) return value;
+  }
+  return [];
+}
+
+function pickId(obj, ...candidates) {
+  for (const name of candidates) {
+    if (obj && obj[name] !== undefined && obj[name] !== null) return obj[name];
+  }
+  return null;
+}
+
+const catalogApi = {
+  languages: () => catalogFetch("languages/list"),
+  countries: (langId) => catalogFetch(`countries/list-countries-by-lang-id/${langId}`),
+  manufacturers: (langId, countryId) =>
+    catalogFetch(
+      `manufacturers/list/lang-id/${langId}/country-filter-id/${countryId}/type-id/${TYPE_ID_AUTOMOBILE}`
+    ),
+  models: (manufacturerId, langId, countryId) =>
+    catalogFetch(
+      `models/list/manufacturer-id/${manufacturerId}/lang-id/${langId}/country-filter-id/${countryId}/type-id/${TYPE_ID_AUTOMOBILE}`
+    ),
+  engines: (modelId, manufacturerId, langId, countryId) =>
+    catalogFetch(
+      `types/list-vehicles-types/${modelId}/manufacturer-id/${manufacturerId}/lang-id/${langId}/country-filter-id/${countryId}/type-id/${TYPE_ID_AUTOMOBILE}`
+    ),
+  categories: (vehicleId, manufacturerId, langId, countryId) =>
+    catalogFetch(
+      `category/category-products-groups-variant-3/${vehicleId}/manufacturer-id/${manufacturerId}/lang-id/${langId}/country-filter-id/${countryId}/type-id/${TYPE_ID_AUTOMOBILE}`
+    ),
+  articles: (vehicleId, productGroupId, manufacturerId, langId, countryId) =>
+    catalogFetch(
+      `articles/list/vehicle-id/${vehicleId}/product-group-id/${productGroupId}/manufacturer-id/${manufacturerId}/lang-id/${langId}/country-filter-id/${countryId}/type-id/${TYPE_ID_AUTOMOBILE}`
+    ),
+};
+
 // ---- UI ----
 
 const vinInput = document.getElementById("vin-input");
@@ -316,6 +428,16 @@ const vinVisual = document.getElementById("vin-visual");
 const partsSection = document.getElementById("parts");
 const partsIntro = document.getElementById("parts-intro");
 const partsGrid = document.getElementById("parts-grid");
+const apiKeyInput = document.getElementById("api-key-input");
+const apiKeySave = document.getElementById("api-key-save");
+const apiKeyClear = document.getElementById("api-key-clear");
+const apiKeyStatus = document.getElementById("api-key-status");
+const liveCatalog = document.getElementById("live-catalog");
+const selectorRow = document.getElementById("selector-row");
+const catalogStatus = document.getElementById("catalog-status");
+const livePartsGrid = document.getElementById("live-parts-grid");
+const genericParts = document.getElementById("generic-parts");
+const genericHeading = document.getElementById("generic-heading");
 
 const SAMPLE_VINS = [
   "1HGCM82633A004352",
@@ -438,7 +560,372 @@ function renderParts(result) {
 
     partsGrid.appendChild(details);
   }
+
+  startLiveCatalog(result);
 }
+
+// ---- Canlı katalog akışı ----
+
+const catalogState = {
+  langId: null,
+  countryId: null,
+  manufacturerId: null,
+  modelId: null,
+  vehicleId: null,
+  brand: null,
+};
+
+function setCatalogStatus(message, kind) {
+  catalogStatus.textContent = message || "";
+  catalogStatus.className = "catalog-status" + (kind ? " " + kind : "");
+}
+
+function makeSelect(labelText, options, onChange, placeholder) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "selector";
+
+  const label = document.createElement("label");
+  label.textContent = labelText;
+  wrapper.appendChild(label);
+
+  const select = document.createElement("select");
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = placeholder || "Seçiniz…";
+  select.appendChild(empty);
+
+  for (const opt of options) {
+    const option = document.createElement("option");
+    option.value = String(opt.value);
+    option.textContent = opt.label;
+    select.appendChild(option);
+  }
+
+  select.addEventListener("change", () => onChange(select.value));
+  wrapper.appendChild(select);
+  return { wrapper, select };
+}
+
+function clearSelectorsAfter(index) {
+  while (selectorRow.children.length > index) {
+    selectorRow.removeChild(selectorRow.lastChild);
+  }
+  livePartsGrid.innerHTML = "";
+}
+
+async function startLiveCatalog(result) {
+  selectorRow.innerHTML = "";
+  livePartsGrid.innerHTML = "";
+  setCatalogStatus("");
+
+  const hasKey = Boolean(getApiKey());
+  liveCatalog.hidden = !hasKey;
+  genericHeading.textContent = hasKey
+    ? "Genel parça kategorileri (API anahtarı olmadan da çalışan referans)"
+    : "Genel parça kategorileri";
+
+  if (!hasKey || !result.brand) return;
+
+  catalogState.brand = result.brand;
+
+  try {
+    setCatalogStatus("Diller yükleniyor…", "loading");
+    const languages = asArray(await catalogApi.languages());
+    if (languages.length === 0) throw new CatalogError("API dil listesi döndürmedi.");
+
+    const langOptions = languages.map((l) => ({
+      value: pickId(l, "langId", "id", "languageId"),
+      label: l.lngDescription || l.languageName || l.name || `Dil ${pickId(l, "langId", "id")}`,
+    }));
+
+    const { wrapper } = makeSelect("Dil", langOptions, onLanguageChange, "Dil seçin…");
+    selectorRow.appendChild(wrapper);
+    setCatalogStatus("Bir dil seçerek devam edin.", "");
+  } catch (e) {
+    setCatalogStatus(describeCatalogError(e), "error");
+  }
+}
+
+function describeCatalogError(e) {
+  if (e instanceof CatalogError) return e.message;
+  return "Beklenmeyen bir hata oluştu: " + (e && e.message ? e.message : String(e));
+}
+
+async function onLanguageChange(value) {
+  clearSelectorsAfter(1);
+  if (!value) return;
+  catalogState.langId = value;
+
+  try {
+    setCatalogStatus("Ülkeler yükleniyor…", "loading");
+    const countries = asArray(await catalogApi.countries(value));
+    const options = countries.map((c) => ({
+      value: pickId(c, "countryId", "id", "countryFilterId"),
+      label: c.couName || c.countryName || c.name || `Ülke ${pickId(c, "countryId", "id")}`,
+    }));
+    const { wrapper } = makeSelect("Ülke", options, onCountryChange, "Ülke seçin…");
+    selectorRow.appendChild(wrapper);
+    setCatalogStatus("Bir ülke seçerek devam edin.", "");
+  } catch (e) {
+    setCatalogStatus(describeCatalogError(e), "error");
+  }
+}
+
+async function onCountryChange(value) {
+  clearSelectorsAfter(2);
+  if (!value) return;
+  catalogState.countryId = value;
+
+  try {
+    setCatalogStatus("Markalar yükleniyor…", "loading");
+    const manufacturers = asArray(
+      await catalogApi.manufacturers(catalogState.langId, catalogState.countryId)
+    );
+
+    // VIN'den bulunan markayı otomatik eşleştirmeyi dene.
+    const wanted = (catalogState.brand || "").toLowerCase();
+    const match = manufacturers.find(
+      (m) => String(m.mfaBrand || m.brand || "").toLowerCase() === wanted
+    );
+
+    const options = manufacturers.map((m) => ({
+      value: pickId(m, "manufacturerId", "mfaId", "id"),
+      label: m.mfaBrand || m.brand || `Marka ${pickId(m, "manufacturerId", "mfaId", "id")}`,
+    }));
+
+    const { wrapper, select } = makeSelect("Marka", options, onManufacturerChange, "Marka seçin…");
+    selectorRow.appendChild(wrapper);
+
+    if (match) {
+      const id = String(pickId(match, "manufacturerId", "mfaId", "id"));
+      select.value = id;
+      setCatalogStatus(`VIN'den bulunan marka otomatik seçildi: ${match.mfaBrand || match.brand}`, "ok");
+      await onManufacturerChange(id);
+    } else {
+      setCatalogStatus(
+        `VIN'den bulunan marka ("${catalogState.brand}") API listesinde birebir eşleşmedi — listeden elle seçin.`,
+        "warn"
+      );
+    }
+  } catch (e) {
+    setCatalogStatus(describeCatalogError(e), "error");
+  }
+}
+
+async function onManufacturerChange(value) {
+  clearSelectorsAfter(3);
+  if (!value) return;
+  catalogState.manufacturerId = value;
+
+  try {
+    setCatalogStatus("Modeller yükleniyor…", "loading");
+    const models = asArray(
+      await catalogApi.models(value, catalogState.langId, catalogState.countryId)
+    );
+    const options = models.map((m) => ({
+      value: pickId(m, "modelId", "id"),
+      label: m.modelName || m.name || `Model ${pickId(m, "modelId", "id")}`,
+    }));
+    const { wrapper } = makeSelect("Model", options, onModelChange, "Model seçin…");
+    selectorRow.appendChild(wrapper);
+    setCatalogStatus(`${options.length} model bulundu — modelinizi seçin.`, "");
+  } catch (e) {
+    setCatalogStatus(describeCatalogError(e), "error");
+  }
+}
+
+async function onModelChange(value) {
+  clearSelectorsAfter(4);
+  if (!value) return;
+  catalogState.modelId = value;
+
+  try {
+    setCatalogStatus("Motor tipleri yükleniyor…", "loading");
+    const engines = asArray(
+      await catalogApi.engines(
+        value,
+        catalogState.manufacturerId,
+        catalogState.langId,
+        catalogState.countryId
+      )
+    );
+    const options = engines.map((t) => ({
+      value: pickId(t, "vehicleId", "id"),
+      label:
+        (t.typeEngineName || t.name || `Motor ${pickId(t, "vehicleId", "id")}`) +
+        (t.constructionIntervalStart
+          ? ` (${t.constructionIntervalStart}${t.constructionIntervalEnd ? " – " + t.constructionIntervalEnd : " –"})`
+          : ""),
+    }));
+    const { wrapper } = makeSelect("Motor / Tip", options, onEngineChange, "Motor tipi seçin…");
+    selectorRow.appendChild(wrapper);
+    setCatalogStatus(`${options.length} motor tipi bulundu — aracınızınkini seçin.`, "");
+  } catch (e) {
+    setCatalogStatus(describeCatalogError(e), "error");
+  }
+}
+
+async function onEngineChange(value) {
+  livePartsGrid.innerHTML = "";
+  if (!value) return;
+  catalogState.vehicleId = value;
+
+  try {
+    setCatalogStatus("Parça kategorileri yükleniyor…", "loading");
+    const tree = await catalogApi.categories(
+      value,
+      catalogState.manufacturerId,
+      catalogState.langId,
+      catalogState.countryId
+    );
+    renderCategoryTree(tree);
+    setCatalogStatus(
+      "Bir kategoriyi açtığınızda o kategorinin gerçek parça numaraları yüklenir.",
+      "ok"
+    );
+  } catch (e) {
+    setCatalogStatus(describeCatalogError(e), "error");
+  }
+}
+
+// Kategori ağacı: nodeId -> { text, children }. Yaprak düğümün nodeId'si
+// articles/list çağrısındaki productGroupId'dir.
+function renderCategoryTree(tree) {
+  livePartsGrid.innerHTML = "";
+  const root = tree && typeof tree === "object" ? tree : {};
+
+  const entries = Object.entries(root.categories || root);
+  if (entries.length === 0) {
+    setCatalogStatus("Bu araç için kategori bulunamadı.", "warn");
+    return;
+  }
+
+  for (const [nodeId, node] of entries) {
+    if (!node || typeof node !== "object") continue;
+    livePartsGrid.appendChild(buildCategoryNode(nodeId, node));
+  }
+}
+
+function buildCategoryNode(nodeId, node) {
+  const details = document.createElement("details");
+  details.className = "part-category live";
+
+  const summary = document.createElement("summary");
+  summary.innerHTML = `<span class="cat-icon">📦</span> ${node.text || "Kategori " + nodeId}`;
+  details.appendChild(summary);
+
+  const body = document.createElement("div");
+  body.className = "live-body";
+  details.appendChild(body);
+
+  const children = node.children && Object.keys(node.children).length > 0 ? node.children : null;
+
+  if (children) {
+    for (const [childId, child] of Object.entries(children)) {
+      body.appendChild(buildCategoryNode(childId, child));
+    }
+  } else {
+    let loaded = false;
+    details.addEventListener("toggle", async () => {
+      if (!details.open || loaded) return;
+      loaded = true;
+      body.innerHTML = '<p class="loading-line">Parçalar yükleniyor…</p>';
+      try {
+        const payload = await catalogApi.articles(
+          catalogState.vehicleId,
+          nodeId,
+          catalogState.manufacturerId,
+          catalogState.langId,
+          catalogState.countryId
+        );
+        renderArticles(body, asArray(payload));
+      } catch (e) {
+        loaded = false; // tekrar denenebilsin
+        body.innerHTML = `<p class="loading-line error">${describeCatalogError(e)}</p>`;
+      }
+    });
+  }
+
+  return details;
+}
+
+function renderArticles(container, articles) {
+  container.innerHTML = "";
+
+  if (articles.length === 0) {
+    container.innerHTML = '<p class="loading-line">Bu kategoride parça bulunamadı.</p>';
+    return;
+  }
+
+  const table = document.createElement("table");
+  table.className = "articles-table";
+  table.innerHTML =
+    "<thead><tr><th>Parça No</th><th>Üretici</th><th>Ürün</th></tr></thead>";
+
+  const tbody = document.createElement("tbody");
+  for (const a of articles) {
+    const tr = document.createElement("tr");
+
+    const no = document.createElement("td");
+    no.className = "article-no";
+    no.textContent = a.articleNo || "—";
+
+    const supplier = document.createElement("td");
+    supplier.textContent = a.supplierName || "—";
+
+    const name = document.createElement("td");
+    name.textContent = a.articleProductName || "—";
+
+    tr.append(no, supplier, name);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  container.appendChild(table);
+
+  const note = document.createElement("p");
+  note.className = "loading-line";
+  note.textContent = `${articles.length} parça listelendi. Numaralar API'den geldiği gibi gösterilir — satın almadan önce aracınızın modeli/motoruyla teyit edin.`;
+  container.appendChild(note);
+}
+
+// ---- API anahtarı paneli ----
+
+function refreshApiKeyStatus() {
+  const key = getApiKey();
+  if (key) {
+    apiKeyStatus.textContent = `Anahtar kayıtlı (••••${key.slice(-4)}). Bir VIN girdiğinizde canlı katalog açılır.`;
+    apiKeyStatus.className = "api-hint ok";
+  } else {
+    apiKeyStatus.textContent = "Anahtar kayıtlı değil — yalnızca genel kategori referansı gösterilir.";
+    apiKeyStatus.className = "api-hint";
+  }
+}
+
+apiKeySave.addEventListener("click", () => {
+  const value = apiKeyInput.value.trim();
+  if (!value) {
+    apiKeyStatus.textContent = "Lütfen bir anahtar girin.";
+    apiKeyStatus.className = "api-hint warn";
+    return;
+  }
+  if (!storeApiKey(value)) {
+    apiKeyStatus.textContent = "Anahtar kaydedilemedi (tarayıcı depolamayı engelliyor olabilir).";
+    apiKeyStatus.className = "api-hint error";
+    return;
+  }
+  apiKeyInput.value = "";
+  refreshApiKeyStatus();
+  render(vinInput.value.trim());
+});
+
+apiKeyClear.addEventListener("click", () => {
+  storeApiKey("");
+  apiKeyInput.value = "";
+  refreshApiKeyStatus();
+  render(vinInput.value.trim());
+});
+
+refreshApiKeyStatus();
 
 vinInput.addEventListener("input", () => {
   const cleaned = vinInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "");

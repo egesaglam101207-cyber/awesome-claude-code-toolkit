@@ -18,6 +18,43 @@ Kapsam bilinçli olarak dar tutulmuştur: Avrupa/Amerika markaları (Volkswagen,
 - **Kategori kategori parça referansı** — tanınan bir marka için, o markanın araçlarında tipik olarak bulunan parçalar 12 kategoride (Motor, Fren, Süspansiyon, Şanzıman/Aktarma, Elektrik, Soğutma, Yakıt, Egzoz, Filtreler, Kaporta, İç Aksam, Klima, Hibrit/Elektrikli) açılır-kapanır listeler halinde gösterilir.
 - **Örnek VIN** butonuyla, elinizde gerçek bir şase numarası yokken aracı hemen deneyebilirsiniz.
 
+## Gerçek parça numaraları (isteğe bağlı, API anahtarı ile)
+
+Varsayılan halde uygulama tamamen çevrimdışıdır ve yalnızca **genel** parça kategorilerini gösterir.
+Parça bölümündeki **🔑 API anahtarı** panelinden bir **RapidAPI** anahtarı girerseniz, uygulama
+[Auto Parts Catalog](https://rapidapi.com/makingdatameaningful/api/auto-parts-catalog) API'sine
+(TecDoc tarzı bir katalog) doğrudan tarayıcınızdan bağlanır ve **gerçek parça numaralarını** çeker.
+
+Akış: **VIN → marka (otomatik) → dil/ülke → model → motor tipi → kategori → parçalar**.
+Her parça için `articleNo` (parça numarası), üretici (Bosch, Febi vb.) ve ürün adı listelenir.
+
+**Neden model ve motor seçmek gerekiyor?** Bu API VIN tabanlı değil, `marka → model → motor tipi`
+hiyerarşisiyle çalışıyor. VIN'den güvenilir şekilde yalnızca marka çıkarılabildiği için, doğru
+parçaya inmek üzere modeli ve motoru sizin seçmeniz gerekiyor.
+
+**Anahtar güvenliği:** Anahtar yalnızca kendi tarayıcınızda `localStorage`'da saklanır ve istek
+doğrudan tarayıcınızdan API'ye gider — hiçbir ara sunucuya gönderilmez. Ancak tarayıcı geliştirici
+araçlarından (Network sekmesi, localStorage) görülebilir; paylaşılan bir cihazda kullanmayın.
+
+### CORS hakkında
+
+Bu uygulama tamamen istemci taraflıdır, yani API çağrısı doğrudan tarayıcıdan yapılır. Bir API'nin
+tarayıcıdan çağrılabilmesi için CORS başlıkları göndermesi gerekir. **Bu entegrasyon canlı API'ye
+karşı test edilememiştir** (geliştirme ortamının ağ politikası RapidAPI'yi engelliyor), dolayısıyla
+API'nin tarayıcı çağrılarına izin verip vermediği bilinmiyor.
+
+"API'ye tarayıcıdan ulaşılamadı" hatası alırsanız muhtemel sebep CORS'tur. Çözüm, isteği bir ara
+katmandan geçirmektir — örneğin küçük bir yerel proxy:
+
+```bash
+# Basit bir yerel proxy örneği (Node.js)
+# İstekleri https://auto-parts-catalog.p.rapidapi.com adresine iletip
+# CORS başlıklarını ekleyen ~20 satırlık bir sunucu yeterlidir.
+```
+
+Alternatif olarak, forkladığınız [tecdoc-autoparts-catalog](https://github.com/ronhartman/tecdoc-autoparts-catalog)
+Symfony uygulaması API'yi sunucu tarafından çağırdığı için CORS sorunu yaşamaz.
+
 ## Kullanım
 
 Ekstra kurulum gerekmez:
@@ -44,6 +81,7 @@ Bu araç **gerçek bir araç sicili, plaka sorgulama sistemi, üretici veritaban
 
 - WMI tablosu kapsamlı değildir ve yalnızca yaygın Japon/Kore markalarını içerir; bu markalara ait birçok model/üretim yeri için de "Bulunamadı" sonucu dönebilir.
 - Kontrol basamağı algoritması resmi ISO 3779 standardıdır, ancak her üretici/pazar bu basamağı aynı şekilde doldurmayabilir — basamak "uyuşmuyor" görünmesi VIN'in sahte olduğu anlamına gelmez.
-- **Parça kategorileri modele/motora özel değildir** — VIN'den yalnızca marka bilgisi güvenilir şekilde çıkarılabildiği için kategoriler o markanın araçlarında genel olarak bulunan parça gruplarını listeler; gerçek parça numarası, stok veya fiyat bilgisi içermez.
+- **Çevrimdışı parça kategorileri modele/motora özel değildir** — VIN'den yalnızca marka bilgisi güvenilir şekilde çıkarılabildiği için kategoriler o markanın araçlarında genel olarak bulunan parça gruplarını listeler; gerçek parça numarası, stok veya fiyat bilgisi içermez. Gerçek numaralar yalnızca API anahtarı girildiğinde gösterilir.
+- **API'den gelen parça numaraları resmi üretici verisi değildir** — kullanılan katalog API'si, sağlayıcısının kendi ifadesiyle üreticilerle bağlantısı olmayan, bağımsız/gayri resmi bir toplulaştırılmış referans veritabanıdır. Ticari kullanım için lisanslı veri (TecDoc vb.) gerekir; parça satın almadan önce numarayı aracınızın modeli/motoruyla teyit edin.
 - Belirli bir aracın tam model, donanım, motor, renk, hasar kaydı, plaka veya sahiplik bilgisi bu şekilde **elde edilemez** — bunlar ve kesin parça uyumu için üreticinin resmi VIN sorgulama sistemine, orijinal parça kataloğuna veya ilgili resmi kuruma başvurulmalıdır.
 - Sonuçlar tahmini ve bilgilendirme amaçlıdır; resmi/hukuki işlemler için kullanılmamalıdır.
